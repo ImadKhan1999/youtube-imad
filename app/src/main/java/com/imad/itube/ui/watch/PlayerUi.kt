@@ -56,6 +56,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -188,9 +196,36 @@ fun PlayerControls(
         }
     }
 
+    // TV remotes and keyboards: with the controls hidden, centre plays/pauses and left/right seek.
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(visible) { if (!visible) runCatching { focus.requestFocus() } }
+    fun seekBy(forward: Boolean) {
+        val delta = seekSeconds * 1000L
+        val target = if (forward) player.currentPosition + delta else player.currentPosition - delta
+        player.seekTo(target.coerceIn(0L, (player.duration.takeIf { it > 0 } ?: Long.MAX_VALUE)))
+    }
+
     BoxWithConstraints(
         modifier
             .fillMaxSize()
+            .focusRequester(focus)
+            .onPreviewKeyEvent { e ->
+                if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                interactionTick++
+                if (visible) return@onPreviewKeyEvent false
+                when (e.key) {
+                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.Spacebar -> {
+                        if (player.isPlaying) player.pause() else player.play()
+                        visible = true
+                        true
+                    }
+                    Key.DirectionLeft -> { seekBy(false); true }
+                    Key.DirectionRight -> { seekBy(true); true }
+                    Key.DirectionUp, Key.DirectionDown -> { visible = true; true }
+                    else -> false
+                }
+            }
+            .focusable()
             .pointerInput(seekSeconds) {
                 detectTapGestures(
                     onTap = { visible = !visible; interactionTick++ },

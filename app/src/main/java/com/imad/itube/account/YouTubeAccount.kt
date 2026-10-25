@@ -10,7 +10,9 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -19,6 +21,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper
 import java.io.IOException
 import java.security.MessageDigest
+
+enum class Rating { Like, Dislike, None }
 
 class NotSignedInException : IOException("Not signed in")
 
@@ -47,9 +51,15 @@ class YouTubeAccount(private val http: OkHttpClient, private val store: AccountS
         return "SAPISIDHASH ${now}_" + digest.joinToString("") { "%02x".format(it) }
     }
 
-    private suspend fun call(endpoint: String, extra: JsonObject.() -> JsonObject = { this }): JsonElement =
+    /** One InnerTube call. With [requireAuth] false it also works signed out, just anonymously. */
+    internal suspend fun call(
+        endpoint: String,
+        requireAuth: Boolean = true,
+        extra: JsonObject.() -> JsonObject = { this },
+    ): JsonElement =
         withContext(Dispatchers.IO) {
-            val account = store.account.value ?: throw NotSignedInException()
+            val account = store.account.value
+            if (account == null && requireAuth) throw NotSignedInException()
             val base = buildJsonObject {
                 putJsonObject("context") {
                     putJsonObject("client") {
@@ -64,7 +74,6 @@ class YouTubeAccount(private val http: OkHttpClient, private val store: AccountS
             val request = Request.Builder()
                 .url("$ORIGIN/youtubei/v1/$endpoint?prettyPrint=false")
                 .post(body.toRequestBody("application/json".toMediaType()))
-                .header("Cookie", account.cookies)
                 .header("Origin", ORIGIN)
                 .header("X-Origin", ORIGIN)
                 .header("Referer", "$ORIGIN/")
@@ -72,7 +81,12 @@ class YouTubeAccount(private val http: OkHttpClient, private val store: AccountS
                 .header("X-Youtube-Client-Name", "1")
                 .header("X-Youtube-Client-Version", clientVersion())
                 .header("User-Agent", DESKTOP_UA)
-                .apply { sapisidHash(account.cookies)?.let { header("Authorization", it) } }
+                .apply {
+                    if (account != null) {
+                        header("Cookie", account.cookies)
+                        sapisidHash(account.cookies)?.let { header("Authorization", it) }
+                    }
+                }
                 .build()
             http.newCall(request).execute().use { res ->
                 if (res.code == 401 || res.code == 403) throw IOException("YouTube didn't accept the sign-in (HTTP ${res.code}). Try signing in again.")
@@ -81,7 +95,7 @@ class YouTubeAccount(private val http: OkHttpClient, private val store: AccountS
             }
         }
 
-    private suspend fun browse(browseId: String?, continuation: String?): JsonElement = call("browse") {
+    private suspend fun browse(browseId: String?, continuation: String?): JsonElement = call("browse", true) {
         buildJsonObject {
             if (continuation != null) put("continuation", continuation) else put("browseId", browseId)
         }
@@ -97,6 +111,26 @@ class YouTubeAccount(private val http: OkHttpClient, private val store: AccountS
             handle = header.text("channelHandle") ?: current.handle,
             avatar = header.at("accountPhoto").lastImage() ?: current.avatar,
         )
+    }
+
+    /** Likes, dislikes or clears the rating of a video. Does nothing signed out. */
+    suspend fun rate(videoId: String, rating: Rating) {
+        if (!isSignedIn) return
+        val endpoint = when (rating) {
+            Rating.Like -> "like/like"
+            Rating.Dislike -> "like/dislike"
+            Rating.None -> "like/removelike"
+        }
+        call(endpoint) { buildJsonObject { putJsonObject("target") { put("videoId", videoId) } } }
+    }
+
+    /** Only /channel/UC… URLs carry the id YouTube needs; others are skipped. */
+    suspend fun setSubscribed(channelUrl: String, subscribed: Boolean) {
+        if (!isSignedIn) return
+        val id = Regex("/channel/(UC[\\w-]{22})").find(channelUrl)?.groupValues?.get(1) ?: return
+        call(if (subscribed) "subscription/subscribe" else "subscription/unsubscribe") {
+            buildJsonObject { putJsonArray("channelIds") { add(id) } }
+        }
     }
 
     /** Every channel the account is subscribed to. */

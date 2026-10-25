@@ -21,7 +21,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,8 +35,6 @@ import com.imad.itube.ui.theme.Yt
 import com.imad.itube.ui.theme.YtRed
 import com.imad.itube.ui.watch.SPEEDS
 import com.imad.itube.ui.watch.speedLabel
-import com.imad.itube.update.Updater
-import kotlinx.coroutines.launch
 
 private val QUALITIES = listOf(144, 240, 360, 480, 720, 1080, 1440, 2160)
 
@@ -47,7 +44,6 @@ private data class Choice<T>(val title: String, val options: List<Pair<String, T
 fun SettingsScreen(onBack: () -> Unit) {
     val container = LocalContext.current.appContainer
     val store = container.settings
-    val scope = rememberCoroutineScope()
     val s by store.settings.collectAsState()
     var choice by remember { mutableStateOf<Choice<*>?>(null) }
 
@@ -90,6 +86,11 @@ fun SettingsScreen(onBack: () -> Unit) {
                 store.update { it.copy(sponsorBlock = v) }
             }
 
+            Section("Notifications")
+            SwitchRow("New uploads", "Tell me when channels I'm subscribed to post a video", s.uploadAlerts) { v ->
+                store.update { it.copy(uploadAlerts = v) }
+            }
+
             Section("Downloads")
             ValueRow("Default download quality", if (s.downloadQuality == 0) "Audio only" else "${s.downloadQuality}p") {
                 choice = Choice(
@@ -111,12 +112,6 @@ fun SettingsScreen(onBack: () -> Unit) {
 
             Section("About")
             ValueRow("iTube", "Version ${BuildConfig.VERSION_NAME}") {}
-            SwitchRow("Check for updates", "Look for a new version each time iTube starts", s.checkUpdates) { v ->
-                store.update { it.copy(checkUpdates = v) }
-            }
-            ValueRow("Check for updates now", "Releases come from github.com/${Updater.REPO}") {
-                scope.launch { container.updater.check(manual = true) }
-            }
             Text(
                 "iTube plays YouTube without ads using the open-source NewPipe Extractor. " +
                     "It is not affiliated with YouTube or Google.",

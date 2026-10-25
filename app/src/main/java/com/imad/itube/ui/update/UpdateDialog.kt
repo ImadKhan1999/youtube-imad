@@ -37,7 +37,7 @@ fun UpdateHost() {
 
     LaunchedEffect(Unit) {
         // Debug builds have their own package name, so a release APK wouldn't update them.
-        if (!BuildConfig.DEBUG && container.settings.settings.value.checkUpdates) updater.check(manual = false)
+        if (!BuildConfig.DEBUG) updater.check(manual = false)
     }
 
     when (val s = state) {

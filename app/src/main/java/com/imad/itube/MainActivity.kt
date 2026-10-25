@@ -102,7 +102,8 @@ class MainActivity : ComponentActivity() {
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         val player = container.player.player
-        if (container.settings.settings.value.pipOnHome && ui.watchExpanded.value &&
+        if (packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE) &&
+            container.settings.settings.value.pipOnHome && ui.watchExpanded.value &&
             player.isPlaying && container.player.state.value.item != null
         ) {
             enterPip()

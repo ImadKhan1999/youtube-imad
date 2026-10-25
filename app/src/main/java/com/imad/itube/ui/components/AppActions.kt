@@ -10,6 +10,8 @@ class AppActions(
     val openChannel: (String) -> Unit,
     val openPlaylist: (String) -> Unit,
     val openSearch: () -> Unit,
+    val openNotifications: () -> Unit,
+    val openCast: () -> Unit,
     val toggleWatchLater: (VideoItem) -> Unit,
     val isInWatchLater: (String) -> Boolean,
     val share: (title: String, url: String) -> Unit,

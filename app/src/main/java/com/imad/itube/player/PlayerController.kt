@@ -104,6 +104,9 @@ class PlayerController(
     val state: StateFlow<WatchState> = _state.asStateFlow()
 
     private var info: StreamInfo? = null
+
+    /** Streams of the video now playing, for casting. */
+    val currentInfo: StreamInfo? get() = info
     private var loadJob: Job? = null
     private var errorRetries = 0
     private val skipped = HashSet<Long>()
