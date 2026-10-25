@@ -1,13 +1,11 @@
 package com.imad.itube.ui.watch
 
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -17,8 +15,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -28,9 +28,9 @@ import androidx.media3.common.text.Cue
 import androidx.media3.common.text.CueGroup
 
 /**
- * Captions drawn the way the YouTube app does: centred near the bottom, white text on a
- * translucent black box per line, sized to the player, and lifted above the progress bar while
- * the controls are showing. The cues' own positions and colours are ignored on purpose, since
+ * Captions drawn the way the YouTube app does: centred near the bottom, sized to the player and
+ * lifted above the progress bar while the controls are showing. White text with a soft dark
+ * outline, no box behind it. The cues' own positions and colours are ignored on purpose, since
  * YouTube's auto-generated tracks park them on the left edge.
  */
 @Composable
@@ -63,12 +63,10 @@ fun CaptionOverlay(player: Player, lifted: Boolean, modifier: Modifier = Modifie
                     color = Color.White,
                     fontSize = size.sp,
                     lineHeight = (size * 1.3f).sp,
-                    fontWeight = FontWeight.Normal,
+                    fontWeight = FontWeight.Medium,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(Color.Black.copy(alpha = 0.75f))
-                        .padding(horizontal = 6.dp, vertical = 1.dp),
+                    // No box: a soft dark outline keeps white text readable on bright video.
+                    style = TextStyle(shadow = Shadow(Color.Black, Offset(0f, 1.5f), blurRadius = 6f)),
                 )
             }
         }
