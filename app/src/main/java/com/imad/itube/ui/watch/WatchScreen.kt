@@ -91,6 +91,7 @@ class WatchCallbacks(
 @Composable
 fun WatchScreen(fullscreen: Boolean, wide: Boolean, callbacks: WatchCallbacks) {
     val container = LocalContext.current.appContainer
+    val actions = LocalAppActions.current
     val controller = container.player
     val state by controller.state.collectAsState()
     val settings by container.settings.settings.collectAsState()
@@ -124,7 +125,9 @@ fun WatchScreen(fullscreen: Boolean, wide: Boolean, callbacks: WatchCallbacks) {
                     onToggleFullscreen = callbacks.onToggleFullscreen,
                     onSettings = { showSettings = true },
                     onCaptions = {
-                        if (state.selectedCaption != null) {
+                        if (state.captions.isEmpty()) {
+                            actions.toast("This video has no captions")
+                        } else if (state.selectedCaption != null) {
                             controller.selectCaption(null)
                         } else {
                             val preferred = settings.captionsLanguage
@@ -411,7 +414,9 @@ private fun ActionsRow(details: VideoDetails, callbacks: WatchCallbacks) {
             }
         }
         item { ActionChip(Icons.Outlined.Share, "Share") { actions.share(details.title, details.url) } }
-        item { ActionChip(Icons.Outlined.Download, "Download") { callbacks.onDownload(video) } }
+        if (!details.isLive) {
+            item { ActionChip(Icons.Outlined.Download, "Download") { callbacks.onDownload(video) } }
+        }
         item {
             ActionChip(if (saved) Icons.Filled.WatchLater else Icons.Outlined.WatchLater, if (saved) "Saved" else "Save") {
                 container.library.toggleWatchLater(video)

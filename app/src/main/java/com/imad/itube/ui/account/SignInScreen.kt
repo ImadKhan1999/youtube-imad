@@ -21,6 +21,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
 import com.imad.itube.account.Account
 import com.imad.itube.appContainer
 import com.imad.itube.ui.components.BackTopBar
@@ -72,8 +74,15 @@ fun SignInScreen(onBack: () -> Unit, onSignedIn: () -> Unit) {
                         WebView(ctx).apply {
                             settings.javaScriptEnabled = true
                             settings.domStorageEnabled = true
-                            // Google refuses sign-in from WebView user agents, so present a regular browser.
-                            settings.userAgentString = SIGNIN_UA
+                            // Google refuses sign-in from anything that looks like an embedded WebView.
+                            // Present the same Chrome engine as a normal browser: drop the WebView
+                            // markers from the user agent and the X-Requested-With app header.
+                            settings.userAgentString = settings.userAgentString
+                                .replace("; wv", "")
+                                .replace(Regex("""Version/[\d.]+ """), "")
+                            if (WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)) {
+                                WebSettingsCompat.setRequestedWithHeaderOriginAllowList(settings, emptySet())
+                            }
                             cookies.setAcceptThirdPartyCookies(this, true)
                             webViewClient = object : WebViewClient() {
                                 override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
@@ -100,5 +109,3 @@ fun SignInScreen(onBack: () -> Unit, onSignedIn: () -> Unit) {
         }
     }
 }
-
-private const val SIGNIN_UA = "Mozilla/5.0 (Android 14; Mobile; rv:140.0) Gecko/140.0 Firefox/140.0"

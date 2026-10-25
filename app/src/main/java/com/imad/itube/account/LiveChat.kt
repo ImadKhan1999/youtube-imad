@@ -36,11 +36,11 @@ class LiveChat(private val api: YouTubeAccount) {
         val watch = api.call("next", requireAuth = false) { buildJsonObject { put("videoId", videoId) } }
         val chat = watch.findFirst("liveChatRenderer") ?: throw IOException("Live chat isn't available for this stream")
         sendParams = chat.findFirst("sendLiveChatMessageEndpoint").str("params")
-        // The first continuation is "Top chat"; the second, when present, is "Live chat" (everything).
-        val menu = chat.at("header", "liveChatHeaderRenderer")?.findAll("continuation")?.mapNotNull { it.str("reloadContinuationData", "continuation") }
-        var token = menu?.getOrNull(1)
-            ?: chat.findFirst("reloadContinuationData").str("continuation")
-            ?: throw IOException("Live chat isn't available for this stream")
+        // The chat's own continuation lives in liveChatRenderer.continuations; the header's
+        // Top chat / Live chat menu tokens are sort switches and get HTTP 400 on their own.
+        var token = (chat.at("continuations") as? JsonArray)?.firstNotNullOfOrNull {
+            it.str("reloadContinuationData", "continuation")
+        } ?: throw IOException("Live chat isn't available for this stream")
         val seen = LinkedHashSet<String>()
         var failures = 0
         while (true) {

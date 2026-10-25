@@ -14,6 +14,7 @@ serialization = "1.8.1"
 datastore = "1.1.1"
 desugar = "2.1.5"
 work = "2.10.1"
+webkit = "1.12.1"
 castFramework = "22.1.0"
 mediarouter = "1.7.0"
 # NewPipeExtractor through JitPack. A commit hash is used (like NewPipe itself does)
@@ -48,6 +49,7 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 newpipe-extractor = { module = "com.github.teamnewpipe:NewPipeExtractor", version.ref = "newpipeExtractor" }
 desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs_nio", version.ref = "desugar" }
 
+androidx-webkit = { module = "androidx.webkit:webkit", version.ref = "webkit" }
 androidx-work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
 play-services-cast-framework = { module = "com.google.android.gms:play-services-cast-framework", version.ref = "castFramework" }
 androidx-mediarouter = { module = "androidx.mediarouter:mediarouter", version.ref = "mediarouter" }

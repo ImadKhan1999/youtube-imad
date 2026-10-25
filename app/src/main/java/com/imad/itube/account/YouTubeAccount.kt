@@ -90,7 +90,12 @@ class YouTubeAccount(private val http: OkHttpClient, private val store: AccountS
                 .build()
             http.newCall(request).execute().use { res ->
                 if (res.code == 401 || res.code == 403) throw IOException("YouTube didn't accept the sign-in (HTTP ${res.code}). Try signing in again.")
-                if (!res.isSuccessful) throw IOException("HTTP ${res.code}")
+                if (!res.isSuccessful) {
+                    val reason = runCatching {
+                        json.parseToJsonElement(res.body?.string().orEmpty()).str("error", "message")
+                    }.getOrNull()
+                    throw IOException("YouTube error ${res.code}" + (reason?.let { ": $it" } ?: ""))
+                }
                 json.parseToJsonElement(res.body?.string().orEmpty())
             }
         }
