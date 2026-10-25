@@ -236,6 +236,7 @@ fun MainScreen(
             }
 
             UpdateHost()
+            com.imad.itube.ui.brand.WelcomeHost()
             if (showCast) CastDialog { showCast = false }
 
             when (val r = downloadRequest) {

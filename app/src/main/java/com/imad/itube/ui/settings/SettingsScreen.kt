@@ -8,6 +8,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -34,6 +36,9 @@ import androidx.compose.ui.unit.dp
 import com.imad.itube.BuildConfig
 import com.imad.itube.appContainer
 import com.imad.itube.data.store.ThemeMode
+import com.imad.itube.ui.brand.ImadLabs
+import com.imad.itube.ui.brand.ImadLabsMark
+import com.imad.itube.ui.brand.TelegramButton
 import com.imad.itube.ui.components.BackTopBar
 import com.imad.itube.ui.components.ScreenScaffold
 import com.imad.itube.ui.theme.Yt
@@ -137,7 +142,15 @@ fun SettingsScreen(onBack: () -> Unit) {
             }
 
             Section("About")
-            ValueRow("iTube", "Version ${BuildConfig.VERSION_NAME}") {}
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+                ImadLabsMark(symbolSize = 40.dp)
+                Spacer(Modifier.height(8.dp))
+                Text("iTube ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyLarge)
+                Text("Made by ImadLabs", style = MaterialTheme.typography.bodySmall, color = Yt.colors.textSecondary)
+                Spacer(Modifier.height(12.dp))
+                TelegramButton()
+            }
+            ValueRow("Telegram channel", "t.me/ImadLabs") { ImadLabs.openTelegram(context) }
         }
     }
 

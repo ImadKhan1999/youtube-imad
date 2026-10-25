@@ -1,13 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Android TV launcher banner (320x180): the iTube play mark on YouTube-dark. -->
+<!-- Android TV launcher banner (320x180): the iTube emblem on ImadLabs Deep Void. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="320dp"
     android:height="180dp"
     android:viewportWidth="320"
     android:viewportHeight="180">
-    <path android:fillColor="#FF0F0F0F" android:pathData="M0,0h320v180h-320z" />
-    <path
-        android:fillColor="#FFFF0033"
-        android:pathData="M118,50h84a22,22 0,0 1,22 22v36a22,22 0,0 1,-22 22h-84a22,22 0,0 1,-22 -22v-36a22,22 0,0 1,22 -22z" />
-    <path android:fillColor="#FFFFFFFF" android:pathData="M148,68L182,90L148,112Z" />
+    <path android:fillColor="#FF070B14" android:pathData="M0,0h320v180h-320z" />
+    <path android:fillColor="#FF0284C7" android:pathData="M160,25L214.17,56.15L160,87.29L105.83,56.15Z" />
+    <path android:fillColor="#FF0F172A" android:pathData="M105.83,61.56L160,92.71L160,155L105.83,123.85Z" />
+    <path android:fillColor="#FF0066FF" android:pathData="M160,92.71L214.17,61.56L214.17,123.85L160,155Z" />
+    <path android:fillColor="#FFFF2A55" android:pathData="M149.84,52.08L183.7,72.4L149.84,92.71Z" />
+    <path android:strokeColor="#FF00F5A0" android:strokeWidth="2.71" android:strokeLineCap="butt" android:strokeLineJoin="round" android:pathData="M160,42.6A18.96,18.96 0,0 1,165.34,43.37M169.48,45.14A18.96,18.96 0,0 1,173.72,48.48M176.42,52.08A18.96,18.96 0,0 1,178.42,57.1M178.96,61.56A18.96,18.96 0,0 1,178.19,66.91M176.42,71.04A18.96,18.96 0,0 1,173.08,75.28M169.48,77.98A18.96,18.96 0,0 1,164.47,79.99M160,80.52A18.96,18.96 0,0 1,154.66,79.75M150.52,77.98A18.96,18.96 0,0 1,146.28,74.64M143.58,71.04A18.96,18.96 0,0 1,141.58,66.03M141.04,61.56A18.96,18.96 0,0 1,141.81,56.22M143.58,52.08A18.96,18.96 0,0 1,146.92,47.84M150.52,45.14A18.96,18.96 0,0 1,155.53,43.14" />
+    <path android:strokeColor="#FF00F5A0" android:strokeWidth="8.12" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M160,92.71L160,134.69L195.21,114.38" />
 </vector>

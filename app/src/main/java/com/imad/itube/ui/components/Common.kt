@@ -52,22 +52,15 @@ import coil3.compose.AsyncImage
 import com.imad.itube.ui.theme.Yt
 import com.imad.itube.ui.theme.YtRed
 
-/** The red rounded "play" mark plus the word iTube, like the YouTube wordmark. */
+/** The iTube emblem (ImadLabs HexaCore cube with a play core) plus the word iTube. */
 @Composable
 fun ITubeLogo(modifier: Modifier = Modifier, height: Dp = 20.dp) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Canvas(Modifier.size(width = height * 1.42f, height = height)) {
-            drawRoundRect(YtRed, cornerRadius = CornerRadius(size.height * 0.28f))
-            val w = size.width
-            val h = size.height
-            val path = Path().apply {
-                moveTo(w * 0.40f, h * 0.30f)
-                lineTo(w * 0.66f, h * 0.50f)
-                lineTo(w * 0.40f, h * 0.70f)
-                close()
-            }
-            drawPath(path, Color.White)
-        }
+        androidx.compose.foundation.Image(
+            androidx.compose.ui.res.painterResource(com.imad.itube.R.drawable.ic_itube_emblem),
+            contentDescription = null,
+            modifier = Modifier.size(height * 1.25f),
+        )
         Spacer(Modifier.width(3.dp))
         Text(
             "iTube",

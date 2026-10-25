@@ -47,6 +47,8 @@ data class Settings(
     val notificationsSeenAt: Long = 0,
     /** Uploads before this time already got a system notification. */
     val notifiedAt: Long = 0,
+    /** The user ticked "Don't show this again" on the welcome / Telegram popup. */
+    val welcomeDismissed: Boolean = false,
 )
 
 class SettingsStore(private val context: Context, private val scope: CoroutineScope) {
@@ -70,6 +72,7 @@ class SettingsStore(private val context: Context, private val scope: CoroutineSc
         val uploadAlerts = booleanPreferencesKey("upload_alerts")
         val seenAt = longPreferencesKey("notifications_seen_at")
         val notifiedAt = longPreferencesKey("notified_at")
+        val welcomeDismissed = booleanPreferencesKey("welcome_dismissed")
     }
 
     val settings: StateFlow<Settings> = context.settingsDataStore.data
@@ -96,6 +99,7 @@ class SettingsStore(private val context: Context, private val scope: CoroutineSc
         uploadAlerts = this[Keys.uploadAlerts] ?: true,
         notificationsSeenAt = this[Keys.seenAt] ?: 0,
         notifiedAt = this[Keys.notifiedAt] ?: 0,
+        welcomeDismissed = this[Keys.welcomeDismissed] ?: false,
     )
 
     /** The stored settings, read straight from disk (the StateFlow starts with defaults). */
@@ -123,6 +127,7 @@ class SettingsStore(private val context: Context, private val scope: CoroutineSc
                 prefs[Keys.uploadAlerts] = s.uploadAlerts
                 prefs[Keys.seenAt] = s.notificationsSeenAt
                 prefs[Keys.notifiedAt] = s.notifiedAt
+                prefs[Keys.welcomeDismissed] = s.welcomeDismissed
             }
         }
     }
