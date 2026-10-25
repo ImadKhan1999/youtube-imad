@@ -1,14 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- iTube by ImadLabs: the HexaCore cube with a play core and the kinetic L (apps/itube in the Graphics repo). -->
+<!-- iTube by ImadLabs launcher foreground (apps/yt/yt-master-icon.svg in the Graphics repo). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path android:fillColor="#FF0284C7" android:pathData="M54,26L77.33,39.42L54,52.83L30.67,39.42Z" />
-    <path android:fillColor="#FF0F172A" android:pathData="M30.67,41.75L54,55.17L54,82L30.67,68.58Z" />
-    <path android:fillColor="#FF0066FF" android:pathData="M54,55.17L77.33,41.75L77.33,68.58L54,82Z" />
-    <path android:fillColor="#FFFF2A55" android:pathData="M49.62,37.67L64.21,46.42L49.62,55.17Z" />
-    <path android:strokeColor="#FF00F5A0" android:strokeWidth="1.17" android:strokeLineCap="butt" android:strokeLineJoin="round" android:pathData="M54,33.58A8.17,8.17 0,0 1,56.3,33.91M58.08,34.68A8.17,8.17 0,0 1,59.91,36.12M61.07,37.67A8.17,8.17 0,0 1,61.94,39.83M62.17,41.75A8.17,8.17 0,0 1,61.84,44.05M61.07,45.83A8.17,8.17 0,0 1,59.63,47.66M58.08,48.82A8.17,8.17 0,0 1,55.92,49.69M54,49.92A8.17,8.17 0,0 1,51.7,49.59M49.92,48.82A8.17,8.17 0,0 1,48.09,47.38M46.93,45.83A8.17,8.17 0,0 1,46.06,43.67M45.83,41.75A8.17,8.17 0,0 1,46.16,39.45M46.93,37.67A8.17,8.17 0,0 1,48.37,35.84M49.92,34.68A8.17,8.17 0,0 1,52.08,33.81" />
-    <path android:strokeColor="#FF00F5A0" android:strokeWidth="3.5" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M54,55.17L54,73.25L69.17,64.5" />
+    <group android:scaleX="0.10547" android:scaleY="0.10547" android:translateX="-1.793" android:translateY="-0.211">
+        <path android:pathData="M342,330H682A110,110 0,0 1,792,440V600A110,110 0,0 1,682,710H342A110,110 0,0 1,232,600V440A110,110 0,0 1,342,330Z"><aapt:attr name="android:fillColor"><gradient android:type="linear" android:startX="300" android:startY="250" android:endX="740" android:endY="760" android:startColor="#FF38BDF8" android:endColor="#FF0066FF" /></aapt:attr></path>
+        <path android:pathData="M465,430L465,610L615,520Z" android:fillColor="#FFFFFFFF" android:strokeColor="#FFFFFFFF" android:strokeWidth="36" android:strokeLineJoin="round" />
+        <path android:pathData="M389,758H635A29,29 0,0 1,664,787V787A29,29 0,0 1,635,816H389A29,29 0,0 1,360,787V787A29,29 0,0 1,389,758Z" android:fillColor="#3300FFC2" />
+        <path android:pathData="M389,770H635A17,17 0,0 1,652,787V787A17,17 0,0 1,635,804H389A17,17 0,0 1,372,787V787A17,17 0,0 1,389,770Z"><aapt:attr name="android:fillColor"><gradient android:type="linear" android:startX="280" android:startY="250" android:endX="760" android:endY="820" android:startColor="#FF00FFC2" android:endColor="#FF00D285" /></aapt:attr></path>
+        <path android:pathData="M716,270A64,64 0,1 1,844,270A64,64 0,1 1,716,270Z" android:fillColor="#3300FFC2" />
+        <path android:pathData="M734,270A46,46 0,1 1,826,270A46,46 0,1 1,734,270Z" android:fillColor="#FF00FFC2" />
+        <path android:pathData="M760,270A20,20 0,1 1,800,270A20,20 0,1 1,760,270Z" android:fillColor="#FFFFFFFF" />
+    </group>
 </vector>

@@ -110,6 +110,8 @@ fun WelcomeHost() {
     LaunchedEffect(Unit) {
         // Read the stored value (the settings flow starts with defaults before it loads).
         if (!WelcomeSession.shown && !container.settings.current().welcomeDismissed) {
+            kotlinx.coroutines.delay(2300) // let the opening animation finish first
+
             WelcomeSession.shown = true
             show = true
         }

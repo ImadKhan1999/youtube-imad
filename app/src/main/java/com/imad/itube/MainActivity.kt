@@ -14,12 +14,18 @@ import android.util.Rational
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import com.imad.itube.ui.brand.SplashOverlay
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.core.app.PictureInPictureModeChangedInfo
 import androidx.core.content.ContextCompat
@@ -80,11 +86,17 @@ class MainActivity : ComponentActivity() {
             },
         )
 
+        // The opening animation plays on a fresh launch from the home screen, not for links or restores.
+        val launchedFromHome = savedInstanceState == null && intent?.action == Intent.ACTION_MAIN
         setContent {
             val settings by container.settings.settings.collectAsState()
             val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+            var showSplash by rememberSaveable { mutableStateOf(launchedFromHome) }
             ITubeTheme(settings.theme) {
-                MainScreen(ui = ui, isInPip = inPip.value, isLandscape = landscape, host = host)
+                Box(Modifier.fillMaxSize()) {
+                    MainScreen(ui = ui, isInPip = inPip.value, isLandscape = landscape, host = host)
+                    if (showSplash && !inPip.value) SplashOverlay { showSplash = false }
+                }
             }
         }
 

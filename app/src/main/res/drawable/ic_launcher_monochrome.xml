@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Single-colour version of the launcher emblem for themed icons. -->
+<!-- Themed (monochrome) launcher icon: the iTube screen, underline and quantum dot. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.55" android:pathData="M54,26L77.33,39.42L54,52.83L30.67,39.42Z" />
-    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.3" android:pathData="M30.67,41.75L54,55.17L54,82L30.67,68.58Z" />
-    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.75" android:pathData="M54,55.17L77.33,41.75L77.33,68.58L54,82Z" />
-    <path android:fillColor="#FFFFFFFF" android:pathData="M49.62,37.67L64.21,46.42L49.62,55.17Z" />
-    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="1.17" android:strokeLineCap="butt" android:strokeLineJoin="round" android:pathData="M54,33.58A8.17,8.17 0,0 1,56.3,33.91M58.08,34.68A8.17,8.17 0,0 1,59.91,36.12M61.07,37.67A8.17,8.17 0,0 1,61.94,39.83M62.17,41.75A8.17,8.17 0,0 1,61.84,44.05M61.07,45.83A8.17,8.17 0,0 1,59.63,47.66M58.08,48.82A8.17,8.17 0,0 1,55.92,49.69M54,49.92A8.17,8.17 0,0 1,51.7,49.59M49.92,48.82A8.17,8.17 0,0 1,48.09,47.38M46.93,45.83A8.17,8.17 0,0 1,46.06,43.67M45.83,41.75A8.17,8.17 0,0 1,46.16,39.45M46.93,37.67A8.17,8.17 0,0 1,48.37,35.84M49.92,34.68A8.17,8.17 0,0 1,52.08,33.81" />
-    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="3.5" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M54,55.17L54,73.25L69.17,64.5" />
+    <group android:scaleX="0.10547" android:scaleY="0.10547" android:translateX="-1.793" android:translateY="-0.211">
+        <path android:fillType="evenOdd" android:fillColor="#FFFFFFFF" android:pathData="M342,330H682A110,110 0,0 1,792,440V600A110,110 0,0 1,682,710H342A110,110 0,0 1,232,600V440A110,110 0,0 1,342,330ZM447,400L447,640L650,520Z" />
+        <path android:fillColor="#FFFFFFFF" android:pathData="M389,770H635A17,17 0,0 1,652,787V787A17,17 0,0 1,635,804H389A17,17 0,0 1,372,787V787A17,17 0,0 1,389,770Z" />
+        <path android:fillColor="#FFFFFFFF" android:pathData="M734,270A46,46 0,1 1,826,270A46,46 0,1 1,734,270Z" />
+    </group>
 </vector>

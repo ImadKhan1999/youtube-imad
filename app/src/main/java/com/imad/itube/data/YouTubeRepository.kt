@@ -2,6 +2,7 @@ package com.imad.itube.data
 
 import androidx.core.text.HtmlCompat
 import com.imad.itube.data.model.ChannelDetails
+import com.imad.itube.data.model.Chapter
 import com.imad.itube.data.model.ChannelItem
 import com.imad.itube.data.model.ChannelTab
 import com.imad.itube.data.model.CommentItem
@@ -138,7 +139,35 @@ class YouTubeRepository {
             tags = info.tags.orEmpty(),
             category = info.category,
             related = info.relatedItems.orEmpty().toFeedItems(),
+            chapters = runCatching { chapters(info, description) }.getOrDefault(emptyList()),
         )
+    }
+
+    /**
+     * The uploader's chapters: YouTube's own chapter list when the extractor found one, otherwise
+     * the timestamps in the description, using YouTube's rule (starts at 0:00, at least 3 of them).
+     */
+    private fun chapters(info: StreamInfo, description: Description?): List<Chapter> {
+        val segments = runCatching { info.streamSegments }.getOrNull().orEmpty()
+        if (segments.size >= 2) {
+            return segments
+                .map { Chapter(it.title.orEmpty().trim(), it.startTimeSeconds * 1000L, it.previewUrl) }
+                .sortedBy { it.startMs }
+        }
+        val raw = description?.content() ?: return emptyList()
+        val text = if (description.type() == Description.Type.HTML) {
+            HtmlCompat.fromHtml(raw, HtmlCompat.FROM_HTML_MODE_LEGACY).toString()
+        } else raw
+        val timestamp = Regex("""^[\s\-•*(\[]*((?:\d+:)?\d{1,2}:\d{2})[\s)\]\-–—:|.]*(.+)$""")
+        val found = text.lineSequence().mapNotNull { line ->
+            val m = timestamp.find(line.trim()) ?: return@mapNotNull null
+            val parts = m.groupValues[1].split(':').map { it.toLongOrNull() ?: return@mapNotNull null }
+            val seconds = parts.fold(0L) { acc, v -> acc * 60 + v }
+            val title = m.groupValues[2].trim()
+            if (title.isEmpty()) null else Chapter(title, seconds * 1000L)
+        }.distinctBy { it.startMs }.sortedBy { it.startMs }.toList()
+        val durationMs = info.duration * 1000L
+        return if (found.size >= 3 && found.first().startMs == 0L && (durationMs <= 0 || found.last().startMs < durationMs)) found else emptyList()
     }
 
     suspend fun comments(videoUrl: String): CommentsPage = io {
