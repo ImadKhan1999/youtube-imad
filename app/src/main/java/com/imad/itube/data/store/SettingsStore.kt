@@ -6,11 +6,13 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -35,6 +37,12 @@ data class Settings(
     val captionsLanguage: String? = null,
     val checkUpdates: Boolean = true,
     val downloadQuality: Int = 720,
+    /** Notify about new uploads from subscriptions. */
+    val uploadAlerts: Boolean = true,
+    /** Uploads before this time (epoch ms) count as read in Notifications. */
+    val notificationsSeenAt: Long = 0,
+    /** Uploads before this time already got a system notification. */
+    val notifiedAt: Long = 0,
 )
 
 class SettingsStore(private val context: Context, private val scope: CoroutineScope) {
@@ -53,6 +61,9 @@ class SettingsStore(private val context: Context, private val scope: CoroutineSc
         val captions = stringPreferencesKey("captions_language")
         val updates = booleanPreferencesKey("check_updates")
         val dlQuality = intPreferencesKey("download_quality")
+        val uploadAlerts = booleanPreferencesKey("upload_alerts")
+        val seenAt = longPreferencesKey("notifications_seen_at")
+        val notifiedAt = longPreferencesKey("notified_at")
     }
 
     val settings: StateFlow<Settings> = context.settingsDataStore.data
@@ -74,7 +85,13 @@ class SettingsStore(private val context: Context, private val scope: CoroutineSc
         captionsLanguage = this[Keys.captions]?.takeIf { it.isNotEmpty() },
         checkUpdates = this[Keys.updates] ?: true,
         downloadQuality = this[Keys.dlQuality] ?: 720,
+        uploadAlerts = this[Keys.uploadAlerts] ?: true,
+        notificationsSeenAt = this[Keys.seenAt] ?: 0,
+        notifiedAt = this[Keys.notifiedAt] ?: 0,
     )
+
+    /** The stored settings, read straight from disk (the StateFlow starts with defaults). */
+    suspend fun current(): Settings = context.settingsDataStore.data.first().toSettings()
 
     fun update(transform: (Settings) -> Settings) {
         scope.launch {
@@ -93,6 +110,9 @@ class SettingsStore(private val context: Context, private val scope: CoroutineSc
                 prefs[Keys.captions] = s.captionsLanguage.orEmpty()
                 prefs[Keys.updates] = s.checkUpdates
                 prefs[Keys.dlQuality] = s.downloadQuality
+                prefs[Keys.uploadAlerts] = s.uploadAlerts
+                prefs[Keys.seenAt] = s.notificationsSeenAt
+                prefs[Keys.notifiedAt] = s.notifiedAt
             }
         }
     }

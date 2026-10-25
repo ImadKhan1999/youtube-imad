@@ -60,6 +60,8 @@ import androidx.navigation.compose.rememberNavController
 import com.imad.itube.appContainer
 import com.imad.itube.data.Kiosk
 import com.imad.itube.ui.account.SignInScreen
+import com.imad.itube.ui.cast.CastDialog
+import com.imad.itube.ui.notifications.NotificationsScreen
 import com.imad.itube.ui.channel.ChannelScreen
 import com.imad.itube.ui.components.AppActions
 import com.imad.itube.ui.components.LocalAppActions
@@ -123,6 +125,7 @@ fun MainScreen(
     val scope = rememberCoroutineScope()
     val hasVideo = watch.item != null
     var downloadRequest by remember { mutableStateOf<DownloadRequest?>(null) }
+    var showCast by remember { mutableStateOf(false) }
 
     val actions = remember(nav) {
         AppActions(
@@ -131,6 +134,8 @@ fun MainScreen(
             openChannel = { url -> ui.collapse(); nav.navigate("channel/${Uri.encode(url)}") },
             openPlaylist = { url -> ui.collapse(); nav.navigate("playlist/${Uri.encode(url)}") },
             openSearch = { nav.navigate("search") },
+            openNotifications = { nav.navigate("notifications") { launchSingleTop = true } },
+            openCast = { showCast = true },
             toggleWatchLater = container.library::toggleWatchLater,
             isInWatchLater = { url -> container.library.data.value.watchLater.any { it.url == url } },
             share = host.share,
@@ -140,6 +145,8 @@ fun MainScreen(
     }
 
     LaunchedEffect(Unit) { controller.messages.collect { actions.toast(it) } }
+    // Fill the bell's badge in the background.
+    LaunchedEffect(Unit) { runCatching { container.uploadAlerts.refresh() } }
     val deepLink by ui.deepLink.collectAsState()
     LaunchedEffect(deepLink) {
         when (val link = deepLink) {
@@ -223,6 +230,7 @@ fun MainScreen(
             }
 
             UpdateHost()
+            if (showCast) CastDialog { showCast = false }
 
             when (val r = downloadRequest) {
                 is DownloadRequest.Single -> DownloadSheet(r) { downloadRequest = null }
@@ -307,6 +315,7 @@ private fun NavGraph(
         }
         composable("downloads") { DownloadsScreen(onBack = back, onPlayed = ui::expand) }
         composable("settings") { SettingsScreen(onBack = back) }
+        composable("notifications") { NotificationsScreen(onBack = back) }
         composable("signin") { SignInScreen(onBack = back, onSignedIn = back) }
     }
 }

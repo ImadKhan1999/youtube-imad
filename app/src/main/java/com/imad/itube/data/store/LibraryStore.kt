@@ -37,12 +37,17 @@ class LibraryStore(context: Context, private val scope: CoroutineScope) {
     private val _data = MutableStateFlow(LibraryData())
     val data: StateFlow<LibraryData> = _data.asStateFlow()
 
+    private val _loaded = MutableStateFlow(false)
+    /** True once library.json has been read. */
+    val loaded: StateFlow<Boolean> = _loaded.asStateFlow()
+
     init {
         scope.launch(Dispatchers.IO) {
             val loaded = runCatching {
                 if (file.exists()) json.decodeFromString<LibraryData>(file.readText()) else null
             }.getOrNull()
             if (loaded != null) _data.value = loaded
+            _loaded.value = true
         }
     }
 

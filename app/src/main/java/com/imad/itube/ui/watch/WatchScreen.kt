@@ -63,6 +63,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.imad.itube.appContainer
+import com.imad.itube.account.Rating
+import kotlinx.coroutines.launch
 import com.imad.itube.data.model.ChannelItem
 import com.imad.itube.data.model.VideoDetails
 import com.imad.itube.data.model.VideoItem
@@ -335,7 +337,7 @@ private fun ChannelBlock(details: VideoDetails) {
         }
         Spacer(Modifier.width(8.dp))
         PillButton(if (subscribed) "Subscribed" else "Subscribe", inverted = !subscribed) {
-            container.library.toggleSubscription(
+            container.toggleSubscription(
                 ChannelItem(
                     url = details.channelUrl,
                     name = details.channelName,
@@ -375,6 +377,10 @@ private fun ActionsRow(details: VideoDetails, callbacks: WatchCallbacks) {
                         .clickable {
                             container.library.toggleLiked(video)
                             if (!liked) disliked = false
+                            // Signed in, the rating goes to your YouTube account too.
+                            container.appScope.launch {
+                                runCatching { container.account.rate(details.id, if (liked) Rating.None else Rating.Like) }
+                            }
                         }
                         .padding(start = 14.dp, end = 12.dp)
                         .height(36.dp),
@@ -393,6 +399,8 @@ private fun ActionsRow(details: VideoDetails, callbacks: WatchCallbacks) {
                         .clickable {
                             disliked = !disliked
                             if (disliked && liked) container.library.toggleLiked(video)
+                            val rating = if (disliked) Rating.Dislike else Rating.None
+                            container.appScope.launch { runCatching { container.account.rate(details.id, rating) } }
                         }
                         .padding(horizontal = 14.dp)
                         .height(36.dp),

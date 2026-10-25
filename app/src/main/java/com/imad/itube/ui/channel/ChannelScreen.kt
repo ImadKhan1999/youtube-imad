@@ -165,7 +165,8 @@ private fun ChannelContent(channel: ChannelDetails, tabs: List<Pair<String, Page
 
 @Composable
 private fun ChannelHeader(channel: ChannelDetails) {
-    val library = LocalContext.current.appContainer.library
+    val app = LocalContext.current.appContainer
+    val library = app.library
     val data by library.data.collectAsState()
     val subscribed = data.subscriptions.any { LibraryStore.sameChannel(it.url, channel.url) }
     Column(Modifier.fillMaxWidth()) {
@@ -222,7 +223,7 @@ private fun ChannelHeader(channel: ChannelDetails) {
             modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
             inverted = !subscribed,
         ) {
-            library.toggleSubscription(
+            app.toggleSubscription(
                 ChannelItem(
                     url = channel.url,
                     name = channel.name,

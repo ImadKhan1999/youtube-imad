@@ -17,7 +17,16 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Cast
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
+import androidx.compose.material.icons.filled.CastConnected
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import com.imad.itube.appContainer
+import com.imad.itube.ui.theme.YtRed
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -58,11 +67,22 @@ fun YtTopBar() {
     ) {
         ITubeLogo()
         Spacer(Modifier.weight(1f))
-        IconButton(onClick = { actions.toast("Casting isn't supported yet") }) {
-            Icon(Icons.Outlined.Cast, contentDescription = "Cast")
+        val container = LocalContext.current.appContainer
+        val casting by container.cast.connected.collectAsState()
+        IconButton(onClick = actions.openCast) {
+            Icon(if (casting) Icons.Filled.CastConnected else Icons.Outlined.Cast, contentDescription = "Cast")
         }
-        IconButton(onClick = { actions.toast("No new notifications") }) {
-            Icon(Icons.Outlined.Notifications, contentDescription = "Notifications")
+        val recent by container.uploadAlerts.recent.collectAsState()
+        val settings by container.settings.settings.collectAsState()
+        val unread = recent.count { (it.uploadedAt ?: 0) > settings.notificationsSeenAt }
+        IconButton(onClick = actions.openNotifications) {
+            BadgedBox(badge = {
+                if (unread > 0) {
+                    Badge(containerColor = YtRed, contentColor = Color.White) { Text(if (unread > 9) "9+" else "$unread") }
+                }
+            }) {
+                Icon(Icons.Outlined.Notifications, contentDescription = "Notifications")
+            }
         }
         IconButton(onClick = actions.openSearch) {
             Icon(Icons.Outlined.Search, contentDescription = "Search")

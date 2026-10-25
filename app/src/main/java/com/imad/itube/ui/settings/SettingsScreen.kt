@@ -86,6 +86,11 @@ fun SettingsScreen(onBack: () -> Unit) {
                 store.update { it.copy(sponsorBlock = v) }
             }
 
+            Section("Notifications")
+            SwitchRow("New uploads", "Tell me when channels I'm subscribed to post a video", s.uploadAlerts) { v ->
+                store.update { it.copy(uploadAlerts = v) }
+            }
+
             Section("Downloads")
             ValueRow("Default download quality", if (s.downloadQuality == 0) "Audio only" else "${s.downloadQuality}p") {
                 choice = Choice(

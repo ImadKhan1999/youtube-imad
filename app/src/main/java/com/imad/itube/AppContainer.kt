@@ -11,6 +11,8 @@ import com.imad.itube.player.PlayerController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import org.schabi.newpipe.extractor.NewPipe
@@ -43,6 +45,8 @@ class AppContainer(val app: Application) {
     val account = YouTubeAccount(okHttp, accountStore)
     val accountComments = com.imad.itube.account.AccountComments(account)
     val liveChat = com.imad.itube.account.LiveChat(account)
+    val cast = com.imad.itube.cast.CastController(app, player, appScope)
+    val uploadAlerts = com.imad.itube.notify.UploadAlerts(app)
     val updater = com.imad.itube.update.Updater(app, okHttp)
 
     /** Fetches the profile and copies the account's subscriptions into the library. */
@@ -59,18 +63,31 @@ class AppContainer(val app: Application) {
         subs.size
     }
 
+    /** Subscribes or unsubscribes here, and on the YouTube account when signed in. */
+    fun toggleSubscription(channel: com.imad.itube.data.model.ChannelItem) {
+        val subscribe = !library.isSubscribed(channel.url)
+        library.toggleSubscription(channel)
+        appScope.launch { runCatching { account.setSubscribed(channel.url, subscribe) } }
+    }
+
     fun signOut() {
         accountStore.save(null)
         android.webkit.CookieManager.getInstance().removeAllCookies(null)
     }
 
     init {
+        cast.init()
         val locale = Locale.getDefault()
         NewPipe.init(
             downloader,
             Localization.fromLocale(locale),
             ContentCountry(locale.country.ifBlank { "US" }),
         )
+        appScope.launch {
+            settings.settings.map { it.uploadAlerts }.distinctUntilChanged().collect { on ->
+                runCatching { uploadAlerts.schedule(on) }
+            }
+        }
         appScope.launch {
             settings.settings.collect { s ->
                 downloader.youtubeCookies = if (s.restrictedMode) NewPipeDownloader.RESTRICTED_MODE_COOKIE else ""

@@ -10,7 +10,9 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -19,6 +21,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper
 import java.io.IOException
 import java.security.MessageDigest
+
+enum class Rating { Like, Dislike, None }
 
 class NotSignedInException : IOException("Not signed in")
 
@@ -107,6 +111,26 @@ class YouTubeAccount(private val http: OkHttpClient, private val store: AccountS
             handle = header.text("channelHandle") ?: current.handle,
             avatar = header.at("accountPhoto").lastImage() ?: current.avatar,
         )
+    }
+
+    /** Likes, dislikes or clears the rating of a video. Does nothing signed out. */
+    suspend fun rate(videoId: String, rating: Rating) {
+        if (!isSignedIn) return
+        val endpoint = when (rating) {
+            Rating.Like -> "like/like"
+            Rating.Dislike -> "like/dislike"
+            Rating.None -> "like/removelike"
+        }
+        call(endpoint) { buildJsonObject { putJsonObject("target") { put("videoId", videoId) } } }
+    }
+
+    /** Only /channel/UC… URLs carry the id YouTube needs; others are skipped. */
+    suspend fun setSubscribed(channelUrl: String, subscribed: Boolean) {
+        if (!isSignedIn) return
+        val id = Regex("/channel/(UC[\\w-]{22})").find(channelUrl)?.groupValues?.get(1) ?: return
+        call(if (subscribed) "subscription/subscribe" else "subscription/unsubscribe") {
+            buildJsonObject { putJsonArray("channelIds") { add(id) } }
+        }
     }
 
     /** Every channel the account is subscribed to. */
