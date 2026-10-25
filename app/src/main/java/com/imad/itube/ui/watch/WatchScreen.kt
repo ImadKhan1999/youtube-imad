@@ -97,6 +97,7 @@ fun WatchScreen(fullscreen: Boolean, wide: Boolean, callbacks: WatchCallbacks) {
     val settings by container.settings.settings.collectAsState()
     val ui = rememberPlayerUiState(controller.player)
     var showSettings by remember { mutableStateOf(false) }
+    var showChapters by remember { mutableStateOf(false) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
 
     val playerBox: @Composable (Modifier) -> Unit = { mod ->
@@ -141,6 +142,7 @@ fun WatchScreen(fullscreen: Boolean, wide: Boolean, callbacks: WatchCallbacks) {
                     onPrevious = controller::playPrevious,
                     onNext = controller::playNext,
                     chapters = state.details?.chapters.orEmpty(),
+                    onChapters = { showChapters = true },
                 )
             }
             if (state.loading && state.details == null) {
@@ -190,6 +192,20 @@ fun WatchScreen(fullscreen: Boolean, wide: Boolean, callbacks: WatchCallbacks) {
         }
     }
 
+    val chapterDetails = state.details
+    if (showChapters && chapterDetails != null && chapterDetails.chapters.isNotEmpty()) {
+        ChaptersSheet(
+            chapters = chapterDetails.chapters,
+            fallbackThumbnail = chapterDetails.thumbnail,
+            positionMs = controller.player.currentPosition,
+            onPick = {
+                controller.player.seekTo(it.startMs)
+                controller.player.play()
+                showChapters = false
+            },
+            onDismiss = { showChapters = false },
+        )
+    }
     if (showSettings) {
         PlayerSettingsSheet(state, controller) { showSettings = false }
     }
@@ -624,16 +640,19 @@ fun MiniPlayer(onExpand: () -> Unit, modifier: Modifier = Modifier) {
     }
 }
 
-/** The uploader's chapters as a row of cards; tapping one jumps there. */
+/** The uploader's chapters as a row of cards; tapping one jumps there, "View all" opens the list. */
 @Composable
 private fun ChaptersRow(details: VideoDetails, onChapter: (com.imad.itube.data.model.Chapter) -> Unit) {
+    var showAll by remember { mutableStateOf(false) }
     Column(Modifier.padding(top = 12.dp)) {
-        Text(
-            "Chapters",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 12.dp),
-        )
+        Row(
+            Modifier.fillMaxWidth().clickable { showAll = true }.padding(horizontal = 12.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Chapters", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.weight(1f))
+            Text("View all", color = Yt.colors.textSecondary, fontSize = 13.sp)
+        }
         Spacer(Modifier.height(8.dp))
         androidx.compose.foundation.lazy.LazyRow(
             contentPadding = PaddingValues(horizontal = 12.dp),
@@ -678,5 +697,15 @@ private fun ChaptersRow(details: VideoDetails, onChapter: (com.imad.itube.data.m
                 }
             }
         }
+    }
+    if (showAll) {
+        val controller = LocalContext.current.appContainer.player
+        ChaptersSheet(
+            chapters = details.chapters,
+            fallbackThumbnail = details.thumbnail,
+            positionMs = controller.player.currentPosition,
+            onPick = { onChapter(it); showAll = false },
+            onDismiss = { showAll = false },
+        )
     }
 }
