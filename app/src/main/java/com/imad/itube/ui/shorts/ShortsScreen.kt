@@ -73,6 +73,8 @@ import com.imad.itube.ui.components.LocalAppActions
 import com.imad.itube.ui.theme.YtRed
 import com.imad.itube.ui.watch.CaptionOverlay
 import com.imad.itube.ui.watch.CommentsSheet
+import com.imad.itube.ui.watch.DoubleSpeedPill
+import com.imad.itube.ui.watch.holdForDoubleSpeed
 import com.imad.itube.ui.watch.PlayerSurface
 import com.imad.itube.util.Format
 import kotlinx.coroutines.delay
@@ -217,6 +219,7 @@ private fun ShortPage(
     val library by container.library.data.collectAsState()
     val liked = library.liked.any { it.url == item.url }
     var paused by remember(item.url) { mutableStateOf(false) }
+    var speedBoost by remember(item.url) { mutableStateOf(false) }
     var videoSize by remember { mutableStateOf(VideoSize.UNKNOWN) }
     var progress by remember { mutableFloatStateOf(0f) }
     val title = details?.title ?: item.title
@@ -250,6 +253,8 @@ private fun ShortPage(
             .background(Color.Black)
             .pointerInput(active) {
                 detectTapGestures(
+                    onPress = { if (active) holdForDoubleSpeed(player.player, viewConfiguration.longPressTimeoutMillis) { speedBoost = it } },
+                    onLongPress = {},
                     onTap = {
                         if (!active) return@detectTapGestures
                         if (player.player.isPlaying) { player.player.pause(); paused = true } else { player.player.play(); paused = false }
@@ -278,6 +283,7 @@ private fun ShortPage(
                 zoomed = videoSize.height > videoSize.width,
             )
             CaptionOverlay(player.player, lifted = true)
+            DoubleSpeedPill(speedBoost, Modifier.align(Alignment.TopCenter).padding(top = 56.dp))
         }
         // Darken the bottom so the text stays readable.
         Box(
