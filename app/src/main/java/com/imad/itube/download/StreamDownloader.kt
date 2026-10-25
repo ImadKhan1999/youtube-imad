@@ -14,7 +14,8 @@ import java.io.IOException
 
 /**
  * Downloads one googlevideo stream to a file in 8 MB slices, using the `range=` parameter the
- * same way the player does (whole-file requests get throttled hard by YouTube).
+ * same way the player does (whole-file requests get throttled hard by YouTube). A partial file
+ * already at [target] is resumed rather than started over.
  */
 class StreamDownloader(private val client: OkHttpClient) {
 
@@ -29,10 +30,16 @@ class StreamDownloader(private val client: OkHttpClient) {
         } else {
             NewPipeDownloader.USER_AGENT
         }
-        var position = 0L
         val total = knownLength
+        // Resume from a partial file left by a pause (only if it can belong to this stream).
+        var position = if (target.exists() && (total <= 0 || target.length() <= total)) target.length() else 0L
+        if (total > 0 && position >= total) {
+            onBytes(position)
+            return
+        }
+        if (position > 0) onBytes(position)
         var rn = 0
-        FileOutputStream(target).use { out ->
+        FileOutputStream(target, position > 0).use { out ->
             while (total <= 0 || position < total) {
                 currentCoroutineContext().ensureActive()
                 val end = position + CHUNK - 1

@@ -38,8 +38,9 @@ class AppContainer(val app: Application) {
     val repository = YouTubeRepository()
     val avatars = com.imad.itube.data.AvatarCache()
     val downloadStore = com.imad.itube.download.DownloadStore(app, appScope)
-    val downloads = com.imad.itube.download.DownloadManager(app, downloadStore, okHttp)
+    val downloads = com.imad.itube.download.DownloadManager(app, downloadStore, settings, okHttp)
     val sponsorBlock = com.imad.itube.data.SponsorBlock(okHttp)
+    val dislikes = com.imad.itube.data.ReturnYouTubeDislike(okHttp)
     val player = PlayerController(app, repository, settings, library, sponsorBlock, appScope)
     val accountStore = AccountStore(app, appScope)
     val account = YouTubeAccount(okHttp, accountStore)
@@ -48,6 +49,9 @@ class AppContainer(val app: Application) {
     val cast = com.imad.itube.cast.CastController(app, player, appScope)
     val uploadAlerts = com.imad.itube.notify.UploadAlerts(app)
     val updater = com.imad.itube.update.Updater(app, okHttp)
+
+    /** A fresh Shorts feed (each visit to the Shorts tab starts a new one). */
+    fun shortsFeed() = com.imad.itube.data.ShortsFeed(repository, account)
 
     /** Fetches the profile and copies the account's subscriptions into the library. */
     fun onSignedIn() {

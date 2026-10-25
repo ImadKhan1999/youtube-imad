@@ -37,6 +37,10 @@ data class Settings(
     val captionsLanguage: String? = null,
     val checkUpdates: Boolean = true,
     val downloadQuality: Int = 720,
+    /** Only download on Wi-Fi (unmetered networks); queued items wait otherwise. */
+    val downloadWifiOnly: Boolean = false,
+    /** A folder picked with the system file picker (tree URI); null = Movies/iTube and Music/iTube. */
+    val downloadFolder: String? = null,
     /** Notify about new uploads from subscriptions. */
     val uploadAlerts: Boolean = true,
     /** Uploads before this time (epoch ms) count as read in Notifications. */
@@ -61,6 +65,8 @@ class SettingsStore(private val context: Context, private val scope: CoroutineSc
         val captions = stringPreferencesKey("captions_language")
         val updates = booleanPreferencesKey("check_updates")
         val dlQuality = intPreferencesKey("download_quality")
+        val dlWifi = booleanPreferencesKey("download_wifi_only")
+        val dlFolder = stringPreferencesKey("download_folder")
         val uploadAlerts = booleanPreferencesKey("upload_alerts")
         val seenAt = longPreferencesKey("notifications_seen_at")
         val notifiedAt = longPreferencesKey("notified_at")
@@ -85,6 +91,8 @@ class SettingsStore(private val context: Context, private val scope: CoroutineSc
         captionsLanguage = this[Keys.captions]?.takeIf { it.isNotEmpty() },
         checkUpdates = this[Keys.updates] ?: true,
         downloadQuality = this[Keys.dlQuality] ?: 720,
+        downloadWifiOnly = this[Keys.dlWifi] ?: false,
+        downloadFolder = this[Keys.dlFolder]?.takeIf { it.isNotEmpty() },
         uploadAlerts = this[Keys.uploadAlerts] ?: true,
         notificationsSeenAt = this[Keys.seenAt] ?: 0,
         notifiedAt = this[Keys.notifiedAt] ?: 0,
@@ -110,6 +118,8 @@ class SettingsStore(private val context: Context, private val scope: CoroutineSc
                 prefs[Keys.captions] = s.captionsLanguage.orEmpty()
                 prefs[Keys.updates] = s.checkUpdates
                 prefs[Keys.dlQuality] = s.downloadQuality
+                prefs[Keys.dlWifi] = s.downloadWifiOnly
+                prefs[Keys.dlFolder] = s.downloadFolder.orEmpty()
                 prefs[Keys.uploadAlerts] = s.uploadAlerts
                 prefs[Keys.seenAt] = s.notificationsSeenAt
                 prefs[Keys.notifiedAt] = s.notifiedAt

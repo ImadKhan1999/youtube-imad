@@ -17,6 +17,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -53,7 +55,19 @@ fun DownloadsScreen(onBack: () -> Unit, onPlayed: () -> Unit) {
     val items by container.downloads.items.collectAsState()
     val sorted = items.sortedByDescending { it.createdAt }
 
-    ScreenScaffold(topBar = { BackTopBar("Downloads", onBack) }) { padding ->
+    val waitingForWifi by container.downloads.waitingForWifi.collectAsState()
+    val active = items.any { it.status == DownloadStatus.Queued || it.status == DownloadStatus.Running }
+    val paused = items.any { it.status == DownloadStatus.Paused }
+
+    ScreenScaffold(topBar = {
+        BackTopBar("Downloads", onBack) {
+            if (active) {
+                IconButton(onClick = { container.downloads.pauseAll() }) { Icon(Icons.Filled.Pause, "Pause all") }
+            } else if (paused) {
+                IconButton(onClick = { container.downloads.resumeAll() }) { Icon(Icons.Filled.PlayArrow, "Resume all") }
+            }
+        }
+    }) { padding ->
         if (sorted.isEmpty()) {
             EmptyBox(
                 "No downloads yet",
@@ -62,6 +76,16 @@ fun DownloadsScreen(onBack: () -> Unit, onPlayed: () -> Unit) {
             )
         } else {
             LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(vertical = 8.dp)) {
+                if (waitingForWifi) {
+                    item {
+                        Text(
+                            "Waiting for Wi-Fi. Downloads start when you connect, or turn off \"Download over Wi-Fi only\" in Settings.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Yt.colors.textSecondary,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        )
+                    }
+                }
                 items(sorted, key = { it.id }) { d ->
                     DownloadRow(d) {
                         val uri = d.fileUri ?: return@DownloadRow
@@ -107,6 +131,11 @@ private fun DownloadRow(d: DownloadItem, onPlay: () -> Unit) {
             )
             val status = when (d.status) {
                 DownloadStatus.Queued -> "Waiting…"
+                DownloadStatus.Paused -> if (d.bytesTotal > 0) {
+                    "Paused · ${(d.progress * 100).toInt()}% · ${sizeText(d.bytesDone)} of ${sizeText(d.bytesTotal)}"
+                } else {
+                    "Paused"
+                }
                 DownloadStatus.Running -> if (d.bytesTotal > 0) {
                     "${(d.progress * 100).toInt()}% · ${sizeText(d.bytesDone)} of ${sizeText(d.bytesTotal)}"
                 } else {
@@ -122,7 +151,7 @@ private fun DownloadRow(d: DownloadItem, onPlay: () -> Unit) {
                 color = if (d.status == DownloadStatus.Failed) YtRed else Yt.colors.textSecondary,
                 maxLines = 2,
             )
-            if (d.status == DownloadStatus.Running) {
+            if (d.status == DownloadStatus.Running || (d.status == DownloadStatus.Paused && d.bytesTotal > 0)) {
                 Spacer(Modifier.height(4.dp))
                 if (d.bytesTotal > 0) {
                     LinearProgressIndicator(progress = { d.progress }, color = YtRed, modifier = Modifier.fillMaxWidth())
@@ -130,6 +159,17 @@ private fun DownloadRow(d: DownloadItem, onPlay: () -> Unit) {
                     LinearProgressIndicator(color = YtRed, modifier = Modifier.fillMaxWidth())
                 }
             }
+        }
+        when (d.status) {
+            DownloadStatus.Queued, DownloadStatus.Running ->
+                IconButton(onClick = { manager.pause(d.id) }, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Filled.Pause, "Pause", Modifier.size(20.dp))
+                }
+            DownloadStatus.Paused ->
+                IconButton(onClick = { manager.resume(d.id) }, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Filled.PlayArrow, "Resume", Modifier.size(20.dp))
+                }
+            else -> {}
         }
         Box {
             IconButton(onClick = { menu = true }, modifier = Modifier.size(40.dp)) {
@@ -139,7 +179,7 @@ private fun DownloadRow(d: DownloadItem, onPlay: () -> Unit) {
                 if (d.status == DownloadStatus.Done) {
                     DropdownMenuItem(text = { Text("Play") }, onClick = { menu = false; onPlay() })
                 }
-                if (d.status == DownloadStatus.Queued || d.status == DownloadStatus.Running) {
+                if (d.status == DownloadStatus.Queued || d.status == DownloadStatus.Running || d.status == DownloadStatus.Paused) {
                     DropdownMenuItem(text = { Text("Cancel") }, onClick = { menu = false; manager.cancel(d.id) })
                 }
                 if (d.status == DownloadStatus.Failed || d.status == DownloadStatus.Cancelled) {
