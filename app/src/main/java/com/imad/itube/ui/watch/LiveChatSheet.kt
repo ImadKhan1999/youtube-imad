@@ -87,6 +87,7 @@ fun LiveChatSheet(videoId: String, onDismiss: () -> Unit) {
     val messages = remember(videoId) { mutableStateListOf<ChatMessage>() }
     var error by remember(videoId) { mutableStateOf<String?>(null) }
     var canSend by remember(videoId) { mutableStateOf(false) }
+    var notice by remember(videoId) { mutableStateOf<String?>(null) }
     var loading by remember(videoId) { mutableStateOf(true) }
     var draft by remember { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
@@ -98,13 +99,17 @@ fun LiveChatSheet(videoId: String, onDismiss: () -> Unit) {
             chat.messages(videoId).collect { update ->
                 loading = false
                 canSend = update.canSend
+                notice = update.notice
                 if (update.messages.isEmpty()) return@collect
                 // Stick to the bottom only if the user hasn't scrolled up to read.
                 val atBottom = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index
                     ?.let { it >= messages.size - 2 } ?: true
                 messages += update.messages
                 if (messages.size > 500) messages.removeRange(0, messages.size - 400)
-                if (atBottom) listState.scrollToItem(messages.lastIndex.coerceAtLeast(0))
+                if (atBottom) {
+                    val last = messages.lastIndex.coerceAtLeast(0)
+                    if (update.messages.size == 1) listState.animateScrollToItem(last) else listState.scrollToItem(last)
+                }
             }
             error = "The live chat has ended."
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -175,7 +180,7 @@ fun LiveChatSheet(videoId: String, onDismiss: () -> Unit) {
                 }
             } else if (!loading && error == null) {
                 Text(
-                    if (container.account.isSignedIn) "Chat is read-only for this stream" else "Sign in to chat",
+                    if (!container.account.isSignedIn) "Sign in to chat" else notice ?: "Chat is read-only for this stream",
                     style = MaterialTheme.typography.bodySmall,
                     color = Yt.colors.textSecondary,
                     modifier = Modifier.padding(16.dp),

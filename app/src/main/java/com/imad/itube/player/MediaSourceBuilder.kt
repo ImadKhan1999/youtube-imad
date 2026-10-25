@@ -70,8 +70,14 @@ class MediaSourceBuilder {
                             .setUri(hls)
                             .setMediaId(mediaId)
                             .setMediaMetadata(metadata)
+                            // No fixed target offset: the stream's own hold-back (about three
+                            // segments) keeps playback flowing instead of stalling at the live
+                            // edge; the player nudges its speed slightly to stay there.
                             .setLiveConfiguration(
-                                MediaItem.LiveConfiguration.Builder().setTargetOffsetMs(10_000).build()
+                                MediaItem.LiveConfiguration.Builder()
+                                    .setMinPlaybackSpeed(0.97f)
+                                    .setMaxPlaybackSpeed(1.03f)
+                                    .build()
                             )
                             .build()
                     )
