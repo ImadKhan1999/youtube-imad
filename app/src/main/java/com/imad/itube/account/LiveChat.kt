@@ -24,7 +24,8 @@ data class ChatMessage(
     val amountColor: Long? = null,
 )
 
-data class ChatUpdate(val messages: List<ChatMessage>, val canSend: Boolean)
+/** [notice] is YouTube's own reason when you can't chat, e.g. "Subscribers-only mode". */
+data class ChatUpdate(val messages: List<ChatMessage>, val canSend: Boolean, val notice: String? = null)
 
 /** YouTube live chat, polled the same way the website does it. Works signed out (read-only). */
 class LiveChat(private val api: YouTubeAccount) {
@@ -43,6 +44,8 @@ class LiveChat(private val api: YouTubeAccount) {
         } ?: throw IOException("Live chat isn't available for this stream")
         val seen = LinkedHashSet<String>()
         var failures = 0
+        var first = true
+        var notice: String? = null
         while (true) {
             val res = try {
                 api.call("live_chat/get_live_chat", requireAuth = false) { buildJsonObject { put("continuation", token) } }
@@ -56,16 +59,40 @@ class LiveChat(private val api: YouTubeAccount) {
             }
             failures = 0
             val cont = res.at("continuationContents", "liveChatContinuation") ?: break
+            // The chat box (and with it the send params) comes in the chat's own responses, the
+            // first one in particular; when it doesn't, YouTube says why in a restriction notice.
+            cont.findFirst("sendLiveChatMessageEndpoint").str("params")?.let { sendParams = it }
+            cont.findFirst("liveChatRestrictedParticipationRenderer")?.text("message")?.let { notice = it }
+            if (first && sendParams == null && api.isSignedIn) {
+                val page = runCatching { api.initialData("/live_chat?is_popout=1&v=$videoId") }.getOrNull()
+                page?.findFirst("sendLiveChatMessageEndpoint").str("params")?.let { sendParams = it }
+                if (sendParams == null) {
+                    page?.findFirst("liveChatRestrictedParticipationRenderer")?.text("message")?.let { notice = it }
+                }
+            }
             val batch = (cont.at("actions") as? JsonArray).orEmpty()
                 .mapNotNull { a -> a.at("addChatItemAction", "item")?.let(::parse) }
                 .filter { seen.add(it.id) }
             if (seen.size > 2000) repeat(seen.size - 1500) { seen.remove(seen.first()) }
-            emit(ChatUpdate(batch, sendParams != null && api.isSignedIn))
-            val next = (cont.at("continuations") as? JsonArray)?.firstOrNull() ?: break
-            val data = next.at("invalidationContinuationData") ?: next.at("timedContinuationData") ?: next.at("reloadContinuationData") ?: break
+            val canSend = sendParams != null && api.isSignedIn
+            val next = (cont.at("continuations") as? JsonArray)?.firstOrNull()
+            val data = next?.let { it.at("invalidationContinuationData") ?: it.at("timedContinuationData") ?: it.at("reloadContinuationData") }
+            val wait = (data.str("timeoutMs")?.toLongOrNull() ?: 4000).coerceIn(1000, 6000)
+            if (first || batch.size <= 1) {
+                // The first batch is the backlog: show it at once.
+                emit(ChatUpdate(batch, canSend, notice))
+                if (data != null) delay(wait)
+            } else {
+                // Spread the batch over the wait so messages trickle in like they do on YouTube,
+                // instead of arriving in a lump every few seconds.
+                val step = wait / batch.size
+                batch.forEach { m ->
+                    emit(ChatUpdate(listOf(m), canSend, notice))
+                    delay(step)
+                }
+            }
+            first = false
             token = data.str("continuation") ?: break
-            val wait = data.str("timeoutMs")?.toLongOrNull() ?: 4000
-            delay(wait.coerceIn(1000, 10_000))
         }
     }
 

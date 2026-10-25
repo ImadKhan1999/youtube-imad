@@ -100,6 +100,27 @@ class YouTubeAccount(private val http: OkHttpClient, private val store: AccountS
             }
         }
 
+    /**
+     * Fetches a youtube.com page with the account's cookies and returns its ytInitialData, for
+     * the few things (like the live chat input box) that only come with the HTML page.
+     */
+    internal suspend fun initialData(pathAndQuery: String): JsonElement? =
+        withContext(Dispatchers.IO) {
+            val account = store.account.value
+            val request = Request.Builder()
+                .url("$ORIGIN$pathAndQuery")
+                .header("User-Agent", DESKTOP_UA)
+                .header("Accept-Language", "en")
+                .apply { if (account != null) header("Cookie", account.cookies) }
+                .build()
+            http.newCall(request).execute().use { res ->
+                if (!res.isSuccessful) return@withContext null
+                val html = res.body?.string().orEmpty()
+                val match = INITIAL_DATA.find(html) ?: return@withContext null
+                runCatching { json.parseToJsonElement(match.groupValues[1]) }.getOrNull()
+            }
+        }
+
     private suspend fun browse(browseId: String?, continuation: String?): JsonElement = call("browse", true) {
         buildJsonObject {
             if (continuation != null) put("continuation", continuation) else put("browseId", browseId)
@@ -235,6 +256,8 @@ class YouTubeAccount(private val http: OkHttpClient, private val store: AccountS
 
     companion object {
         const val ORIGIN = "https://www.youtube.com"
+        private val INITIAL_DATA =
+            Regex("""(?:window\\["ytInitialData"]|var ytInitialData)\\s*=\\s*(\\{.*?});\\s*</script>""", RegexOption.DOT_MATCHES_ALL)
         private const val FALLBACK_VERSION = "2.20251020.01.00"
         const val DESKTOP_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0"
 
