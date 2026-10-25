@@ -257,7 +257,7 @@ class YouTubeAccount(private val http: OkHttpClient, private val store: AccountS
     companion object {
         const val ORIGIN = "https://www.youtube.com"
         private val INITIAL_DATA =
-            Regex("""(?:window\\["ytInitialData"]|var ytInitialData)\\s*=\\s*(\\{.*?});\\s*</script>""", RegexOption.DOT_MATCHES_ALL)
+            Regex("""(?:window\["ytInitialData"\]|var ytInitialData)\s*=\s*(\{.*?\});\s*</script>""", RegexOption.DOT_MATCHES_ALL)
         private const val FALLBACK_VERSION = "2.20251020.01.00"
         const val DESKTOP_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0"
 
