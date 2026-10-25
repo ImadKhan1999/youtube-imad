@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.WatchLater
 import androidx.compose.material3.DropdownMenu
@@ -122,6 +123,8 @@ fun VideoCard(video: VideoItem, extraMenu: List<Pair<String, () -> Unit>> = empt
                 Modifier.clickable(enabled = video.channelUrl != null) {
                     video.channelUrl?.let(actions.openChannel)
                 },
+                name = video.channelName,
+                channelUrl = video.channelUrl,
             )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -209,6 +212,14 @@ private fun VideoMenu(video: VideoItem, extraMenu: List<Pair<String, () -> Unit>
                     actions.share(video.title, video.url)
                 },
             )
+            DropdownMenuItem(
+                text = { Text("Download") },
+                leadingIcon = { Icon(Icons.Outlined.Download, null) },
+                onClick = {
+                    open = false
+                    actions.download(video)
+                },
+            )
             extraMenu.forEach { (label, action) ->
                 DropdownMenuItem(text = { Text(label) }, onClick = { open = false; action() })
             }
@@ -227,7 +238,7 @@ fun ChannelRow(channel: ChannelItem) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.width(136.dp), contentAlignment = Alignment.Center) {
-            Avatar(channel.avatar, 88.dp)
+            Avatar(channel.avatar, 88.dp, name = channel.name)
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {

@@ -31,6 +31,10 @@ data class Settings(
     val defaultSpeed: Float = 1f,
     val theme: ThemeMode = ThemeMode.System,
     val seekSeconds: Int = 10,
+    val sponsorBlock: Boolean = true,
+    val captionsLanguage: String? = null,
+    val checkUpdates: Boolean = true,
+    val downloadQuality: Int = 720,
 )
 
 class SettingsStore(private val context: Context, private val scope: CoroutineScope) {
@@ -45,6 +49,10 @@ class SettingsStore(private val context: Context, private val scope: CoroutineSc
         val speed = floatPreferencesKey("default_speed")
         val theme = stringPreferencesKey("theme")
         val seek = intPreferencesKey("seek_seconds")
+        val sponsor = booleanPreferencesKey("sponsorblock")
+        val captions = stringPreferencesKey("captions_language")
+        val updates = booleanPreferencesKey("check_updates")
+        val dlQuality = intPreferencesKey("download_quality")
     }
 
     val settings: StateFlow<Settings> = context.settingsDataStore.data
@@ -62,6 +70,10 @@ class SettingsStore(private val context: Context, private val scope: CoroutineSc
         theme = this[Keys.theme]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
             ?: ThemeMode.System,
         seekSeconds = this[Keys.seek] ?: 10,
+        sponsorBlock = this[Keys.sponsor] ?: true,
+        captionsLanguage = this[Keys.captions]?.takeIf { it.isNotEmpty() },
+        checkUpdates = this[Keys.updates] ?: true,
+        downloadQuality = this[Keys.dlQuality] ?: 720,
     )
 
     fun update(transform: (Settings) -> Settings) {
@@ -77,6 +89,10 @@ class SettingsStore(private val context: Context, private val scope: CoroutineSc
                 prefs[Keys.speed] = s.defaultSpeed
                 prefs[Keys.theme] = s.theme.name
                 prefs[Keys.seek] = s.seekSeconds
+                prefs[Keys.sponsor] = s.sponsorBlock
+                prefs[Keys.captions] = s.captionsLanguage.orEmpty()
+                prefs[Keys.updates] = s.checkUpdates
+                prefs[Keys.dlQuality] = s.downloadQuality
             }
         }
     }

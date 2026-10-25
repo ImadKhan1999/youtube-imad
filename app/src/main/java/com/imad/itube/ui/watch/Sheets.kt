@@ -189,7 +189,7 @@ fun CommentsSheet(videoUrl: String, onDismiss: () -> Unit) {
 @Composable
 private fun CommentRow(c: CommentItem) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
-        Avatar(c.authorAvatar, 28.dp)
+        Avatar(c.authorAvatar, 28.dp, name = c.author)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             if (c.pinned) {

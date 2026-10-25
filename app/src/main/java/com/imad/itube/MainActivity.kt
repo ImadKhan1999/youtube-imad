@@ -162,6 +162,7 @@ class MainActivity : ComponentActivity() {
         intent ?: return
         when (intent.action) {
             ACTION_OPEN_PLAYER -> if (container.player.state.value.item != null) ui.expand()
+            ACTION_OPEN_DOWNLOADS -> ui.open(DeepLink.Downloads)
             Intent.ACTION_VIEW -> intent.dataString?.let(::openUrl)
             Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)?.let { text ->
                 val url = Regex("https?://\\S+").find(text)?.value
@@ -188,5 +189,6 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val ACTION_OPEN_PLAYER = "com.imad.itube.OPEN_PLAYER"
+        const val ACTION_OPEN_DOWNLOADS = "com.imad.itube.OPEN_DOWNLOADS"
     }
 }

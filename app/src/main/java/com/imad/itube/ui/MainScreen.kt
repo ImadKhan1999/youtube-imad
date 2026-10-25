@@ -33,7 +33,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -50,10 +52,11 @@ import com.imad.itube.appContainer
 import com.imad.itube.data.Kiosk
 import com.imad.itube.ui.channel.ChannelScreen
 import com.imad.itube.ui.components.AppActions
-import com.imad.itube.ui.components.EmptyBox
 import com.imad.itube.ui.components.LocalAppActions
-import com.imad.itube.ui.components.ScreenScaffold
-import com.imad.itube.ui.components.BackTopBar
+import com.imad.itube.ui.downloads.DownloadRequest
+import com.imad.itube.ui.downloads.DownloadSheet
+import com.imad.itube.ui.downloads.DownloadsScreen
+import com.imad.itube.ui.downloads.PlaylistDownloadSheet
 import com.imad.itube.ui.explore.ExploreScreen
 import com.imad.itube.ui.explore.KioskScreen
 import com.imad.itube.ui.home.HomeScreen
@@ -108,26 +111,31 @@ fun MainScreen(
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val hasVideo = watch.item != null
+    var downloadRequest by remember { mutableStateOf<DownloadRequest?>(null) }
 
     val actions = remember(nav) {
         AppActions(
             openVideo = { v -> controller.play(v); ui.expand() },
+            playQueue = { items, index, title -> controller.playQueue(items, index, title); ui.expand() },
             openChannel = { url -> ui.collapse(); nav.navigate("channel/${Uri.encode(url)}") },
             openPlaylist = { url -> ui.collapse(); nav.navigate("playlist/${Uri.encode(url)}") },
             openSearch = { nav.navigate("search") },
             toggleWatchLater = container.library::toggleWatchLater,
             isInWatchLater = { url -> container.library.data.value.watchLater.any { it.url == url } },
             share = host.share,
+            download = { v -> downloadRequest = DownloadRequest.Single(v, emptyList()) },
             toast = { msg -> scope.launch { snackbar.currentSnackbarData?.dismiss(); snackbar.showSnackbar(msg) } },
         )
     }
 
+    LaunchedEffect(Unit) { controller.messages.collect { actions.toast(it) } }
     val deepLink by ui.deepLink.collectAsState()
     LaunchedEffect(deepLink) {
         when (val link = deepLink) {
             is DeepLink.Channel -> { ui.collapse(); nav.navigate("channel/${Uri.encode(link.url)}") }
             is DeepLink.Playlist -> { ui.collapse(); nav.navigate("playlist/${Uri.encode(link.url)}") }
             is DeepLink.Search -> { ui.collapse(); nav.navigate("search") }
+            DeepLink.Downloads -> { ui.collapse(); nav.navigate("downloads") { launchSingleTop = true } }
             null -> {}
         }
         if (deepLink != null) ui.consumeDeepLink()
@@ -154,7 +162,7 @@ fun MainScreen(
         onBackground = {
             host.moveToBackground()
         },
-        onDownload = { actions.toast("Downloads arrive in the next iTube update") },
+        onDownload = { v -> downloadRequest = DownloadRequest.Single(v, watch.qualities.map { it.height }) },
     )
 
     androidx.compose.runtime.CompositionLocalProvider(LocalAppActions provides actions) {
@@ -169,7 +177,9 @@ fun MainScreen(
                     }
                 },
             ) { padding ->
-                NavGraph(nav, ui, Modifier.padding(padding))
+                NavGraph(nav, ui, Modifier.padding(padding), onDownloadPlaylist = { title, url ->
+                    downloadRequest = DownloadRequest.Playlist(title, url)
+                })
             }
 
             AnimatedVisibility(
@@ -178,6 +188,12 @@ fun MainScreen(
                 exit = slideOutVertically { it },
             ) {
                 WatchScreen(fullscreen = fullscreen, callbacks = watchCallbacks)
+            }
+
+            when (val r = downloadRequest) {
+                is DownloadRequest.Single -> DownloadSheet(r) { downloadRequest = null }
+                is DownloadRequest.Playlist -> PlaylistDownloadSheet(r) { downloadRequest = null }
+                null -> {}
             }
         }
     }
@@ -217,7 +233,12 @@ private fun BottomBar(nav: NavHostController) {
 }
 
 @Composable
-private fun NavGraph(nav: NavHostController, ui: MainUiState, modifier: Modifier) {
+private fun NavGraph(
+    nav: NavHostController,
+    ui: MainUiState,
+    modifier: Modifier,
+    onDownloadPlaylist: (String, String) -> Unit,
+) {
     val back: () -> Unit = { nav.popBackStack() }
     NavHost(nav, startDestination = "home", modifier = modifier) {
         composable("home") { HomeScreen() }
@@ -235,7 +256,7 @@ private fun NavGraph(nav: NavHostController, ui: MainUiState, modifier: Modifier
             ChannelScreen(Uri.decode(e.arguments?.getString("url").orEmpty()), onBack = back)
         }
         composable("playlist/{url}") { e ->
-            PlaylistScreen(Uri.decode(e.arguments?.getString("url").orEmpty()), onBack = back)
+            PlaylistScreen(Uri.decode(e.arguments?.getString("url").orEmpty()), onBack = back, onDownload = onDownloadPlaylist)
         }
         composable("kiosk/{name}") { e ->
             val kiosk = runCatching { Kiosk.valueOf(e.arguments?.getString("name").orEmpty()) }.getOrDefault(Kiosk.Music)
@@ -245,15 +266,7 @@ private fun NavGraph(nav: NavHostController, ui: MainUiState, modifier: Modifier
             val list = runCatching { VideoList.valueOf(e.arguments?.getString("name").orEmpty()) }.getOrDefault(VideoList.History)
             VideoListScreen(list, onBack = back)
         }
-        composable("downloads") {
-            ScreenScaffold(topBar = { BackTopBar("Downloads", back) }) { p ->
-                EmptyBox(
-                    "Downloads are on the way",
-                    "Saving videos and audio for offline viewing arrives in the next update.",
-                    Modifier.padding(p),
-                )
-            }
-        }
+        composable("downloads") { DownloadsScreen(onBack = back, onPlayed = ui::expand) }
         composable("settings") { SettingsScreen(onBack = back) }
     }
 }

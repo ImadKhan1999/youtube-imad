@@ -84,7 +84,7 @@ fun SubscriptionsScreen() {
                                         .padding(4.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                 ) {
-                                    Avatar(ch.avatar, 56.dp)
+                                    Avatar(ch.avatar, 56.dp, name = ch.name, channelUrl = ch.url)
                                     Spacer(Modifier.height(4.dp))
                                     Text(
                                         ch.name,

@@ -32,7 +32,11 @@ class AppContainer(val app: Application) {
     val settings = SettingsStore(app, appScope)
     val library = LibraryStore(app, appScope)
     val repository = YouTubeRepository()
-    val player = PlayerController(app, repository, settings, library, appScope)
+    val avatars = com.imad.itube.data.AvatarCache()
+    val downloadStore = com.imad.itube.download.DownloadStore(app, appScope)
+    val downloads = com.imad.itube.download.DownloadManager(app, downloadStore, okHttp)
+    val sponsorBlock = com.imad.itube.data.SponsorBlock(okHttp)
+    val player = PlayerController(app, repository, settings, library, sponsorBlock, appScope)
 
     init {
         val locale = Locale.getDefault()

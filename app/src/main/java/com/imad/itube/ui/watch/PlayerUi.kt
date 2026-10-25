@@ -36,6 +36,9 @@ import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.PictureInPictureAlt
+import androidx.compose.material.icons.outlined.ClosedCaptionOff
+import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -155,9 +158,14 @@ fun PlayerControls(
     fullscreen: Boolean,
     seekSeconds: Int,
     hasNext: Boolean,
+    captionsAvailable: Boolean,
+    captionsOn: Boolean,
     onCollapse: () -> Unit,
     onToggleFullscreen: () -> Unit,
     onSettings: () -> Unit,
+    onCaptions: () -> Unit,
+    onPopup: () -> Unit,
+    onPrevious: () -> Unit,
     onNext: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -248,6 +256,18 @@ fun PlayerControls(
                     } else {
                         Spacer(Modifier.weight(1f))
                     }
+                    IconButton(onClick = { onPopup(); interactionTick++ }) {
+                        Icon(Icons.Outlined.PictureInPictureAlt, "Popup player", tint = Color.White)
+                    }
+                    if (captionsAvailable) {
+                        IconButton(onClick = { onCaptions(); interactionTick++ }) {
+                            Icon(
+                                if (captionsOn) Icons.Filled.ClosedCaption else Icons.Outlined.ClosedCaptionOff,
+                                "Captions",
+                                tint = Color.White,
+                            )
+                        }
+                    }
                     IconButton(onClick = { onSettings(); interactionTick++ }) {
                         Icon(Icons.Outlined.Settings, "Settings", tint = Color.White)
                     }
@@ -259,8 +279,8 @@ fun PlayerControls(
                     horizontalArrangement = Arrangement.spacedBy(36.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    RoundControl(Icons.Filled.SkipPrevious, "Restart", 40.dp, enabled = !isLive) {
-                        player.seekTo(0); interactionTick++
+                    RoundControl(Icons.Filled.SkipPrevious, "Previous", 40.dp, enabled = !isLive) {
+                        onPrevious(); interactionTick++
                     }
                     if (ui.buffering) {
                         Box(Modifier.size(64.dp), contentAlignment = Alignment.Center) {

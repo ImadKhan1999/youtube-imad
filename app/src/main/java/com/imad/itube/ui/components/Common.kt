@@ -29,6 +29,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import com.imad.itube.appContainer
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -72,18 +79,54 @@ fun ITubeLogo(modifier: Modifier = Modifier, height: Dp = 20.dp) {
     }
 }
 
+/**
+ * A round channel avatar. Shows the channel's initial while loading or when YouTube gave us no
+ * picture; when [channelUrl] is set and [url] is missing, the avatar is looked up on demand.
+ */
 @Composable
-fun Avatar(url: String?, size: Dp, modifier: Modifier = Modifier) {
-    AsyncImage(
-        model = url,
-        contentDescription = null,
-        contentScale = ContentScale.Crop,
-        modifier = modifier
+fun Avatar(
+    url: String?,
+    size: Dp,
+    modifier: Modifier = Modifier,
+    name: String? = null,
+    channelUrl: String? = null,
+) {
+    val cache = LocalContext.current.appContainer.avatars
+    val resolved by produceState(initialValue = url ?: channelUrl?.let(cache::cached), url, channelUrl) {
+        if (value == null && channelUrl != null) value = cache.get(channelUrl)
+    }
+    var failed by remember(resolved) { mutableStateOf(false) }
+    Box(
+        modifier
             .size(size)
             .clip(CircleShape)
-            .background(Yt.colors.chip),
-    )
+            .background(avatarColor(name)),
+        contentAlignment = Alignment.Center,
+    ) {
+        val initial = name?.trim()?.firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()
+        if (initial != null) {
+            Text(initial.toString(), color = Color.White, fontSize = (size.value * 0.42f).sp, fontWeight = FontWeight.Medium)
+        }
+        if (resolved != null && !failed) {
+            AsyncImage(
+                model = resolved,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                onError = { failed = true },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
 }
+
+private val AVATAR_COLORS = listOf(
+    Color(0xFF5C6BC0), Color(0xFF26A69A), Color(0xFFEF5350), Color(0xFFAB47BC),
+    Color(0xFF42A5F5), Color(0xFFFF7043), Color(0xFF66BB6A), Color(0xFF8D6E63),
+)
+
+@Composable
+private fun avatarColor(name: String?): Color =
+    if (name.isNullOrBlank()) Yt.colors.chip else AVATAR_COLORS[(name.hashCode() and 0x7fffffff) % AVATAR_COLORS.size]
 
 @Composable
 fun VerifiedBadge(modifier: Modifier = Modifier) {

@@ -43,6 +43,7 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -113,10 +114,25 @@ fun WatchScreen(fullscreen: Boolean, callbacks: WatchCallbacks) {
                     isLive = state.isLive,
                     fullscreen = fullscreen,
                     seekSeconds = settings.seekSeconds,
-                    hasNext = state.details?.related?.any { it is VideoItem } == true,
+                    hasNext = controller.hasNext,
+                    captionsAvailable = state.captions.isNotEmpty(),
+                    captionsOn = state.selectedCaption != null,
                     onCollapse = callbacks.onCollapse,
                     onToggleFullscreen = callbacks.onToggleFullscreen,
                     onSettings = { showSettings = true },
+                    onCaptions = {
+                        if (state.selectedCaption != null) {
+                            controller.selectCaption(null)
+                        } else {
+                            val preferred = settings.captionsLanguage
+                            val pick = state.captions.firstOrNull { it.languageTag == preferred }
+                                ?: state.captions.firstOrNull { it.languageTag.startsWith(java.util.Locale.getDefault().language) }
+                                ?: state.captions.first()
+                            controller.selectCaption(pick)
+                        }
+                    },
+                    onPopup = callbacks.onEnterPip,
+                    onPrevious = controller::playPrevious,
                     onNext = controller::playNext,
                 )
             }
@@ -171,11 +187,29 @@ private fun WatchDetails(state: WatchState, callbacks: WatchCallbacks) {
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         when {
+            state.offline -> item(key = "offline") {
+                Column(Modifier.padding(12.dp)) {
+                    Text(state.item?.title.orEmpty(), style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp))
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        Format.joinDot(state.item?.channelName, "Playing from downloads"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Yt.colors.textSecondary,
+                    )
+                    state.error?.let {
+                        Spacer(Modifier.height(8.dp))
+                        Text(it, color = YtRed, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
             details != null -> {
                 item(key = "title") { TitleBlock(details) { showDescription = true } }
                 item(key = "channel") { ChannelBlock(details) }
                 item(key = "actions") { ActionsRow(details, callbacks) }
-                item(key = "comments") { CommentsTeaser { showComments = true } }
+                if (state.queue.isNotEmpty()) {
+                    item(key = "queue") { QueueCard(state) }
+                }
+                item(key = "comments") { CommentsTeaser(details.url) { showComments = true } }
                 items(details.related, key = { "rel:" + it.url }) { FeedItemView(it) }
             }
             state.error != null -> item {
@@ -256,7 +290,7 @@ private fun ChannelBlock(details: VideoDetails) {
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Avatar(details.channelAvatar, 36.dp)
+        Avatar(details.channelAvatar, 36.dp, name = details.channelName, channelUrl = details.channelUrl)
         Spacer(Modifier.width(12.dp))
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -379,20 +413,116 @@ private fun ActionChip(icon: ImageVector, label: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun CommentsTeaser(onClick: () -> Unit) {
+private fun QueueCard(state: WatchState) {
+    val controller = LocalContext.current.appContainer.player
+    var open by remember { mutableStateOf(false) }
+    Column(
+        Modifier
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Yt.colors.chip),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().clickable { open = !open }.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                val next = state.queue.getOrNull(state.queueIndex + 1)
+                Text(
+                    next?.let { "Next: ${it.title}" } ?: "End of playlist",
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    Format.joinDot(state.queueTitle, "${state.queueIndex + 1} / ${state.queue.size}"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Yt.colors.textSecondary,
+                )
+            }
+            Text(if (open) "Hide" else "Show", style = MaterialTheme.typography.labelLarge)
+        }
+        if (open) {
+            state.queue.forEachIndexed { i, v ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(if (i == state.queueIndex) Yt.colors.divider else Color.Transparent)
+                        .clickable { controller.playQueueItem(i) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("${i + 1}", style = MaterialTheme.typography.bodySmall, color = Yt.colors.textSecondary, modifier = Modifier.width(28.dp))
+                    com.imad.itube.ui.components.Thumbnail(v.thumbnail, v.duration, v.isLive, Modifier.width(96.dp), rounded = true)
+                    Spacer(Modifier.width(8.dp))
+                    Text(v.title, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The comments card under the actions: one random comment from the top five,
+ * like YouTube's teaser, or a note when there are none.
+ */
+@Composable
+private fun CommentsTeaser(videoUrl: String, onClick: () -> Unit) {
+    val repo = LocalContext.current.appContainer.repository
+    val teaser by produceState<Teaser>(Teaser.Loading, videoUrl) {
+        value = try {
+            val page = repo.comments(videoUrl)
+            when {
+                page.disabled -> Teaser.Message("Comments are turned off.")
+                page.comments.isEmpty() -> Teaser.Message("No comments yet")
+                else -> Teaser.Comment(page.comments.take(5).random(), page.totalCount)
+            }
+        } catch (e: Exception) {
+            Teaser.Message("Couldn't load comments")
+        }
+    }
+    val t = teaser
     Column(
         Modifier
             .padding(12.dp)
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(Yt.colors.chip)
-            .clickable(onClick = onClick)
+            .clickable(enabled = t is Teaser.Comment, onClick = onClick)
             .padding(12.dp),
     ) {
-        Text("Comments", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
-        Spacer(Modifier.height(4.dp))
-        Text("Tap to read what people are saying", style = MaterialTheme.typography.bodySmall, color = Yt.colors.textSecondary)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Comments", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
+            if (t is Teaser.Comment && t.total > 0) {
+                Spacer(Modifier.width(6.dp))
+                Text(Format.compact(t.total.toLong()), style = MaterialTheme.typography.bodySmall, color = Yt.colors.textSecondary)
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        when (t) {
+            Teaser.Loading -> Box(
+                Modifier.fillMaxWidth(0.7f).height(14.dp).clip(RoundedCornerShape(4.dp)).background(Yt.colors.divider),
+            )
+            is Teaser.Message -> Text(t.text, style = MaterialTheme.typography.bodySmall, color = Yt.colors.textSecondary)
+            is Teaser.Comment -> Row(verticalAlignment = Alignment.CenterVertically) {
+                Avatar(t.comment.authorAvatar, 24.dp, name = t.comment.author)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    t.comment.text,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
+}
+
+private sealed interface Teaser {
+    data object Loading : Teaser
+    data class Message(val text: String) : Teaser
+    data class Comment(val comment: com.imad.itube.data.model.CommentItem, val total: Int) : Teaser
 }
 
 /** The collapsed player that sits above the bottom navigation bar. */

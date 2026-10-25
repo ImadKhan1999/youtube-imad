@@ -183,7 +183,7 @@ private fun ChannelHeader(channel: ChannelDetails) {
             )
         }
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Avatar(channel.avatar, 72.dp)
+            Avatar(channel.avatar, 72.dp, name = channel.name)
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

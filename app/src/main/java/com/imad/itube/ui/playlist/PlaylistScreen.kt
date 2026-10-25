@@ -1,6 +1,8 @@
 package com.imad.itube.ui.playlist
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -49,7 +51,7 @@ class PlaylistViewModel(container: AppContainer, url: String) : ViewModel() {
 }
 
 @Composable
-fun PlaylistScreen(url: String, onBack: () -> Unit) {
+fun PlaylistScreen(url: String, onBack: () -> Unit, onDownload: (title: String, url: String) -> Unit) {
     val container = LocalContext.current.appContainer
     val actions = LocalAppActions.current
     val vm: PlaylistViewModel = viewModel(key = "playlist:$url") { PlaylistViewModel(container, url) }
@@ -76,9 +78,17 @@ fun PlaylistScreen(url: String, onBack: () -> Unit) {
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Yt.colors.textSecondary,
                                 )
-                                val first = state.items.firstOrNull() as? VideoItem
-                                if (first != null) {
-                                    PillButton("Play all", Modifier.fillMaxWidth().padding(top = 12.dp)) { actions.openVideo(first) }
+                                val videos = state.items.filterIsInstance<VideoItem>()
+                                if (videos.isNotEmpty()) {
+                                    Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        PillButton("Play all", Modifier.weight(1f)) { actions.playQueue(videos, 0, d.title) }
+                                        PillButton("Shuffle", Modifier.weight(1f), inverted = false) {
+                                            actions.playQueue(videos.shuffled(), 0, d.title)
+                                        }
+                                    }
+                                    PillButton("Download", Modifier.fillMaxWidth().padding(top = 8.dp), inverted = false) {
+                                        onDownload(d.title, d.url)
+                                    }
                                 }
                             }
                         }

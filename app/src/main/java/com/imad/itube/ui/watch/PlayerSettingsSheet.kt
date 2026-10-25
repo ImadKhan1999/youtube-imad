@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Audiotrack
+import androidx.compose.material.icons.outlined.ClosedCaption
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.SlowMotionVideo
 import androidx.compose.material.icons.outlined.Tune
@@ -39,7 +40,7 @@ import com.imad.itube.player.WatchState
 import com.imad.itube.ui.theme.Yt
 import com.imad.itube.ui.theme.YtRed
 
-private enum class Page { Main, Quality, Speed, Audio }
+private enum class Page { Main, Quality, Speed, Audio, Captions }
 
 val SPEEDS = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 3f)
 
@@ -65,8 +66,13 @@ fun PlayerSettingsSheet(state: WatchState, controller: PlayerController, onDismi
                         state.selectedQuality == null -> "Auto" + (state.autoQuality?.let { " (${it.label})" } ?: "")
                         else -> state.selectedQuality.label
                     }
-                    SettingRow(Icons.Outlined.Tune, "Quality", q) { if (!state.isLive) page = Page.Quality }
+                    if (!state.offline) SettingRow(Icons.Outlined.Tune, "Quality", q) { if (!state.isLive) page = Page.Quality }
                     SettingRow(Icons.Outlined.SlowMotionVideo, "Playback speed", speedLabel(state.speed)) { page = Page.Speed }
+                    if (state.captions.isNotEmpty()) {
+                        SettingRow(Icons.Outlined.ClosedCaption, "Captions", state.selectedCaption?.label ?: "Off") {
+                            page = Page.Captions
+                        }
+                    }
                     if (state.audioTracks.size > 1) {
                         val current = state.selectedAudioTrack ?: state.audioTracks.first()
                         SettingRow(Icons.Outlined.Audiotrack, "Audio track", current.label) { page = Page.Audio }
@@ -110,6 +116,18 @@ fun PlayerSettingsSheet(state: WatchState, controller: PlayerController, onDismi
                     SPEEDS.forEach { s ->
                         OptionRow(speedLabel(s), null, selected = state.speed == s) {
                             controller.setSpeed(s); onDismiss()
+                        }
+                    }
+                }
+
+                Page.Captions -> {
+                    Header("Captions") { page = Page.Main }
+                    OptionRow("Off", null, selected = state.selectedCaption == null) {
+                        controller.selectCaption(null); onDismiss()
+                    }
+                    state.captions.forEach { c ->
+                        OptionRow(c.label, null, selected = state.selectedCaption?.languageTag == c.languageTag) {
+                            controller.selectCaption(c); onDismiss()
                         }
                     }
                 }

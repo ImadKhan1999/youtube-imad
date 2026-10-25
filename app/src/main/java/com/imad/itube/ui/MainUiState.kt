@@ -10,6 +10,7 @@ sealed interface DeepLink {
     data class Channel(val url: String) : DeepLink
     data class Playlist(val url: String) : DeepLink
     data class Search(val query: String) : DeepLink
+    data object Downloads : DeepLink
 }
 
 /** Activity-scoped UI state shared between Compose and [com.imad.itube.MainActivity]. */
