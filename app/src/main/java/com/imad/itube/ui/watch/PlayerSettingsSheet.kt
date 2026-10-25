@@ -68,14 +68,21 @@ fun PlayerSettingsSheet(state: WatchState, controller: PlayerController, onDismi
                     }
                     if (!state.offline) SettingRow(Icons.Outlined.Tune, "Quality", q) { if (!state.isLive) page = Page.Quality }
                     SettingRow(Icons.Outlined.SlowMotionVideo, "Playback speed", speedLabel(state.speed)) { page = Page.Speed }
-                    if (state.captions.isNotEmpty()) {
-                        SettingRow(Icons.Outlined.ClosedCaption, "Captions", state.selectedCaption?.label ?: "Off") {
-                            page = Page.Captions
+                    SettingRow(
+                        Icons.Outlined.ClosedCaption,
+                        "Captions",
+                        if (state.captions.isEmpty()) "Not available" else state.selectedCaption?.label ?: "Off",
+                    ) { if (state.captions.isNotEmpty()) page = Page.Captions }
+                    if (!state.offline) {
+                        val current = state.selectedAudioTrack ?: state.audioTracks.firstOrNull()
+                        val label = when {
+                            state.audioTracks.isEmpty() -> "Default"
+                            state.audioTracks.size == 1 -> "${current?.label ?: "Default"} (only track)"
+                            else -> current?.label ?: "Default"
                         }
-                    }
-                    if (state.audioTracks.size > 1) {
-                        val current = state.selectedAudioTrack ?: state.audioTracks.first()
-                        SettingRow(Icons.Outlined.Audiotrack, "Audio track", current.label) { page = Page.Audio }
+                        SettingRow(Icons.Outlined.Audiotrack, "Audio track", label) {
+                            if (state.audioTracks.size > 1) page = Page.Audio
+                        }
                     }
                     Row(
                         Modifier

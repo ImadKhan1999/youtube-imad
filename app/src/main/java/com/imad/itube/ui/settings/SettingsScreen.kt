@@ -112,13 +112,6 @@ fun SettingsScreen(onBack: () -> Unit) {
 
             Section("About")
             ValueRow("iTube", "Version ${BuildConfig.VERSION_NAME}") {}
-            Text(
-                "iTube plays YouTube without ads using the open-source NewPipe Extractor. " +
-                    "It is not affiliated with YouTube or Google.",
-                style = MaterialTheme.typography.bodySmall,
-                color = Yt.colors.textSecondary,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            )
         }
     }
 

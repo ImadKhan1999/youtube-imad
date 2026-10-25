@@ -14,8 +14,8 @@ android {
         minSdk = 26
         targetSdk = 35
         // Release builds get these from the tag, e.g. v1.2.3 -> 1.2.3 (see .github/workflows/release.yml).
-        versionName = providers.gradleProperty("itubeVersionName").getOrElse("1.1.0")
-        versionCode = providers.gradleProperty("itubeVersionCode").map(String::toInt).getOrElse(10100)
+        versionName = providers.gradleProperty("itubeVersionName").getOrElse("1.1.1")
+        versionCode = providers.gradleProperty("itubeVersionCode").map(String::toInt).getOrElse(10101)
         vectorDrawables.useSupportLibrary = true
     }
 
@@ -91,6 +91,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.work.runtime)
+    implementation(libs.androidx.webkit)
     implementation(libs.play.services.cast.framework)
     implementation(libs.androidx.mediarouter)
 

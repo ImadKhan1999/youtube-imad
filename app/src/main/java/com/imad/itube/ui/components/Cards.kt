@@ -212,14 +212,16 @@ private fun VideoMenu(video: VideoItem, extraMenu: List<Pair<String, () -> Unit>
                     actions.share(video.title, video.url)
                 },
             )
-            DropdownMenuItem(
-                text = { Text("Download") },
-                leadingIcon = { Icon(Icons.Outlined.Download, null) },
-                onClick = {
-                    open = false
-                    actions.download(video)
-                },
-            )
+            if (!video.isLive) {
+                DropdownMenuItem(
+                    text = { Text("Download") },
+                    leadingIcon = { Icon(Icons.Outlined.Download, null) },
+                    onClick = {
+                        open = false
+                        actions.download(video)
+                    },
+                )
+            }
             extraMenu.forEach { (label, action) ->
                 DropdownMenuItem(text = { Text(label) }, onClick = { open = false; action() })
             }

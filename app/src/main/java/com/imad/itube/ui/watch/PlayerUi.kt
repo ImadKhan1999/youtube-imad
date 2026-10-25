@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -196,6 +197,9 @@ fun PlayerControls(
         }
     }
 
+    // Live streams with a DVR window can be scrubbed back, like on YouTube.
+    val liveSeekable = isLive && ui.duration > 0 && player.isCurrentMediaItemSeekable
+
     // TV remotes and keyboards: with the controls hidden, centre plays/pauses and left/right seek.
     val focus = remember { FocusRequester() }
     LaunchedEffect(visible) { if (!visible) runCatching { focus.requestFocus() } }
@@ -294,14 +298,12 @@ fun PlayerControls(
                     IconButton(onClick = { onPopup(); interactionTick++ }) {
                         Icon(Icons.Outlined.PictureInPictureAlt, "Popup player", tint = Color.White)
                     }
-                    if (captionsAvailable) {
-                        IconButton(onClick = { onCaptions(); interactionTick++ }) {
-                            Icon(
-                                if (captionsOn) Icons.Filled.ClosedCaption else Icons.Outlined.ClosedCaptionOff,
-                                "Captions",
-                                tint = Color.White,
-                            )
-                        }
+                    IconButton(onClick = { onCaptions(); interactionTick++ }) {
+                        Icon(
+                            if (captionsOn) Icons.Filled.ClosedCaption else Icons.Outlined.ClosedCaptionOff,
+                            "Captions",
+                            tint = if (captionsAvailable) Color.White else Color.White.copy(alpha = 0.5f),
+                        )
                     }
                     IconButton(onClick = { onSettings(); interactionTick++ }) {
                         Icon(Icons.Outlined.Settings, "Settings", tint = Color.White)
@@ -350,9 +352,20 @@ fun PlayerControls(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (isLive) {
+                        // Red at the live edge; grey when you've seeked back. Tap to jump to live.
+                        val behind = runCatching { player.currentLiveOffset }.getOrDefault(C.TIME_UNSET)
+                        val atEdge = behind == C.TIME_UNSET || behind < 20_000 || !liveSeekable
                         Box(
-                            Modifier.clip(RoundedCornerShape(2.dp)).background(YtRed).padding(horizontal = 4.dp, vertical = 1.dp),
+                            Modifier
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(if (atEdge) YtRed else Color.White.copy(alpha = 0.3f))
+                                .clickable { player.seekToDefaultPosition(); interactionTick++ }
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
                         ) { Text("LIVE", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                        if (!atEdge && behind != C.TIME_UNSET) {
+                            Spacer(Modifier.width(8.dp))
+                            Text("-${Format.position(behind)}", color = Color.White, fontSize = 12.sp)
+                        }
                     } else {
                         val shown = scrubbing?.let { (it * ui.duration).toLong() } ?: ui.position
                         Text(
@@ -373,7 +386,7 @@ fun PlayerControls(
             }
         }
 
-        if (!isLive) {
+        if (!isLive || liveSeekable) {
             SeekBar(
                 position = ui.position,
                 buffered = ui.buffered,
