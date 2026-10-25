@@ -126,7 +126,7 @@ fun PlaylistDownloadSheet(request: DownloadRequest.Playlist, onDismiss: () -> Un
     val qualityLabels = listOf("1080p", "720p", "480p", "360p", "Audio only")
     val qualityValues = listOf(1080, 720, 480, 360, 0)
     var quality by remember {
-        mutableIntStateOf(qualityValues.indexOf(container.settings.settings.value.downloadQuality).coerceAtLeast(1))
+        mutableIntStateOf(qualityValues.indexOf(container.settings.settings.value.downloadQuality).takeIf { it >= 0 } ?: 1)
     }
 
     LaunchedEffect(request.url) {

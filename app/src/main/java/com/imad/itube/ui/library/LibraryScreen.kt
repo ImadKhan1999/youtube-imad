@@ -2,6 +2,7 @@ package com.imad.itube.ui.library
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -31,6 +32,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,6 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.imad.itube.appContainer
 import com.imad.itube.data.model.VideoItem
+import com.imad.itube.ui.components.Avatar
 import com.imad.itube.ui.components.BackTopBar
 import com.imad.itube.ui.components.EmptyBox
 import com.imad.itube.ui.components.LocalAppActions
@@ -49,6 +55,7 @@ import com.imad.itube.ui.components.Thumbnail
 import com.imad.itube.ui.components.VideoRow
 import com.imad.itube.ui.components.YtTopBar
 import com.imad.itube.ui.theme.Yt
+import kotlinx.coroutines.launch
 
 enum class VideoList(val title: String) { History("History"), WatchLater("Watch later"), Liked("Liked videos") }
 
@@ -58,6 +65,7 @@ fun LibraryScreen(
     onOpenList: (VideoList) -> Unit,
     onOpenDownloads: () -> Unit,
     onOpenSettings: () -> Unit,
+    onSignIn: () -> Unit,
 ) {
     val container = LocalContext.current.appContainer
     val actions = LocalAppActions.current
@@ -66,27 +74,53 @@ fun LibraryScreen(
     ScreenScaffold(topBar = { YtTopBar() }) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(bottom = 24.dp)) {
             item {
+                val account by container.accountStore.account.collectAsState()
+                val scope = rememberCoroutineScope()
+                var syncing by remember { mutableStateOf(false) }
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier.size(64.dp).clip(CircleShape).background(Yt.colors.chip),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(Icons.Outlined.AccountCircle, null, Modifier.size(48.dp), tint = Yt.colors.textSecondary)
+                    val a = account
+                    if (a != null) {
+                        Avatar(a.avatar, 64.dp, name = a.name ?: "Y")
+                    } else {
+                        Box(
+                            Modifier.size(64.dp).clip(CircleShape).background(Yt.colors.chip),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(Icons.Outlined.AccountCircle, null, Modifier.size(48.dp), tint = Yt.colors.textSecondary)
+                        }
                     }
                     Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("You", style = MaterialTheme.typography.titleLarge)
+                        Text(a?.name ?: "You", style = MaterialTheme.typography.titleLarge)
                         Text(
-                            "Your library is stored on this phone",
+                            if (a != null) a.handle ?: "Signed in with Google" else "Your library is stored on this phone",
                             style = MaterialTheme.typography.bodySmall,
                             color = Yt.colors.textSecondary,
                         )
                     }
                 }
-                PillButton(
-                    "Sign in with Google",
-                    modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
-                ) { actions.toast("Google sign-in arrives in the next update") }
+                if (account == null) {
+                    PillButton(
+                        "Sign in with Google",
+                        modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
+                    ) { onSignIn() }
+                } else {
+                    Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PillButton(if (syncing) "Syncing…" else "Sync subscriptions", inverted = false) {
+                            if (syncing) return@PillButton
+                            syncing = true
+                            scope.launch {
+                                val r = container.syncSubscriptions()
+                                syncing = false
+                                actions.toast(r.fold({ "Synced $it subscriptions" }, { "Couldn't sync: ${it.message}" }))
+                            }
+                        }
+                        PillButton("Sign out", inverted = false) {
+                            container.signOut()
+                            actions.toast("Signed out")
+                        }
+                    }
+                }
                 Spacer(Modifier.height(16.dp))
             }
 

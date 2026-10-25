@@ -71,6 +71,12 @@ class LibraryStore(context: Context, private val scope: CoroutineScope) {
         }
     }
 
+    /** Adds channels that aren't already subscribed, keeping the existing order. */
+    fun mergeSubscriptions(channels: List<ChannelItem>) = mutate { d ->
+        val fresh = channels.filter { c -> d.subscriptions.none { sameChannel(it.url, c.url) } }
+        d.copy(subscriptions = d.subscriptions + fresh)
+    }
+
     fun addToHistory(video: VideoItem) = mutate { d ->
         d.copy(history = (listOf(video) + d.history.filterNot { it.url == video.url }).take(500))
     }

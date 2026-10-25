@@ -29,6 +29,7 @@ import com.imad.itube.ui.components.YtTopBar
 class HomeViewModel(container: AppContainer) : ViewModel() {
     private val repo = container.repository
     private val library = container.library
+    private val account = container.account
 
     /** "All" first, then one tab per category. */
     val chips: List<String> = listOf("All") + Kiosk.entries.filter { it != Kiosk.Trending }.map { it.title }
@@ -38,17 +39,30 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
             Paged(
                 viewModelScope,
                 first = {
-                    // "All": recent uploads from your subscriptions mixed into the categories.
-                    val subs = library.data.value.subscriptions
-                    val fromSubs = if (subs.isNotEmpty()) {
-                        runCatching { repo.subscriptionFeed(subs.take(30)).take(20) }.getOrDefault(emptyList())
+                    // Signed in: your own recommendations, like the real app.
+                    val personal = if (account.isSignedIn) {
+                        runCatching { account.home() }.getOrNull()?.takeIf { it.items.isNotEmpty() }
                     } else {
-                        emptyList()
+                        null
                     }
-                    val mix = repo.homeMix()
-                    ItemPage(interleave(fromSubs, mix), null)
+                    if (personal != null) {
+                        ItemPage(personal.items, personal.next)
+                    } else {
+                        // "All": recent uploads from your subscriptions mixed into the categories.
+                        val subs = library.data.value.subscriptions
+                        val fromSubs = if (subs.isNotEmpty()) {
+                            runCatching { repo.subscriptionFeed(subs.take(30)).take(20) }.getOrDefault(emptyList())
+                        } else {
+                            emptyList()
+                        }
+                        val mix = repo.homeMix()
+                        ItemPage(interleave(fromSubs, mix), null)
+                    }
                 },
-                more = { ItemPage(emptyList(), null) },
+                more = { next ->
+                    val page = account.home(next as String)
+                    ItemPage(page.items, page.next)
+                },
             )
         )
         Kiosk.entries.filter { it != Kiosk.Trending }.forEach { k ->

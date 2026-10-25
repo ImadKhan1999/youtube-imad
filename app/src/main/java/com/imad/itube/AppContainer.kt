@@ -1,6 +1,8 @@
 package com.imad.itube
 
 import android.app.Application
+import com.imad.itube.account.AccountStore
+import com.imad.itube.account.YouTubeAccount
 import com.imad.itube.data.YouTubeRepository
 import com.imad.itube.data.net.NewPipeDownloader
 import com.imad.itube.data.store.LibraryStore
@@ -37,6 +39,28 @@ class AppContainer(val app: Application) {
     val downloads = com.imad.itube.download.DownloadManager(app, downloadStore, okHttp)
     val sponsorBlock = com.imad.itube.data.SponsorBlock(okHttp)
     val player = PlayerController(app, repository, settings, library, sponsorBlock, appScope)
+    val accountStore = AccountStore(app, appScope)
+    val account = YouTubeAccount(okHttp, accountStore)
+    val updater = com.imad.itube.update.Updater(app, okHttp)
+
+    /** Fetches the profile and copies the account's subscriptions into the library. */
+    fun onSignedIn() {
+        appScope.launch {
+            runCatching { accountStore.save(account.profile()) }
+            syncSubscriptions()
+        }
+    }
+
+    suspend fun syncSubscriptions(): Result<Int> = runCatching {
+        val subs = account.subscriptions()
+        library.mergeSubscriptions(subs)
+        subs.size
+    }
+
+    fun signOut() {
+        accountStore.save(null)
+        android.webkit.CookieManager.getInstance().removeAllCookies(null)
+    }
 
     init {
         val locale = Locale.getDefault()

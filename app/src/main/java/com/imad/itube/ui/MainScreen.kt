@@ -50,6 +50,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.imad.itube.appContainer
 import com.imad.itube.data.Kiosk
+import com.imad.itube.ui.account.SignInScreen
 import com.imad.itube.ui.channel.ChannelScreen
 import com.imad.itube.ui.components.AppActions
 import com.imad.itube.ui.components.LocalAppActions
@@ -68,6 +69,7 @@ import com.imad.itube.ui.search.SearchScreen
 import com.imad.itube.ui.settings.SettingsScreen
 import com.imad.itube.ui.subscriptions.SubscriptionsScreen
 import com.imad.itube.ui.theme.Yt
+import com.imad.itube.ui.update.UpdateHost
 import com.imad.itube.ui.watch.MiniPlayer
 import com.imad.itube.ui.watch.PlayerSurface
 import com.imad.itube.ui.watch.WatchCallbacks
@@ -190,6 +192,8 @@ fun MainScreen(
                 WatchScreen(fullscreen = fullscreen, callbacks = watchCallbacks)
             }
 
+            UpdateHost()
+
             when (val r = downloadRequest) {
                 is DownloadRequest.Single -> DownloadSheet(r) { downloadRequest = null }
                 is DownloadRequest.Playlist -> PlaylistDownloadSheet(r) { downloadRequest = null }
@@ -249,6 +253,7 @@ private fun NavGraph(
                 onOpenList = { nav.navigate("list/${it.name}") },
                 onOpenDownloads = { nav.navigate("downloads") },
                 onOpenSettings = { nav.navigate("settings") },
+                onSignIn = { nav.navigate("signin") },
             )
         }
         composable("search") { SearchScreen(onBack = back) }
@@ -268,5 +273,6 @@ private fun NavGraph(
         }
         composable("downloads") { DownloadsScreen(onBack = back, onPlayed = ui::expand) }
         composable("settings") { SettingsScreen(onBack = back) }
+        composable("signin") { SignInScreen(onBack = back, onSignedIn = back) }
     }
 }

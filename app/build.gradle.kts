@@ -13,9 +13,24 @@ android {
         applicationId = "com.imad.itube"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        // Release builds get these from the tag, e.g. v1.2.3 -> 1.2.3 (see .github/workflows/release.yml).
+        versionName = providers.gradleProperty("itubeVersionName").getOrElse("1.0.0")
+        versionCode = providers.gradleProperty("itubeVersionCode").map(String::toInt).getOrElse(10000)
         vectorDrawables.useSupportLibrary = true
+    }
+
+    // The release key lives only in GitHub secrets. Without it, release builds fall back to
+    // the debug key so pull-request builds still produce an installable APK.
+    val keystore = System.getenv("ITUBE_KEYSTORE")?.let(::file)?.takeIf { it.exists() }
+    signingConfigs {
+        if (keystore != null) {
+            create("release") {
+                storeFile = keystore
+                storePassword = System.getenv("ITUBE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ITUBE_KEY_ALIAS")
+                keyPassword = System.getenv("ITUBE_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -23,8 +38,7 @@ android {
             // Minification is off for now: NewPipeExtractor relies on Rhino and reflection,
             // which need a curated keep-rule set before R8 can be turned on safely.
             isMinifyEnabled = false
-            // Signed with the debug key so CI can produce an installable release APK.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
         debug {
             applicationIdSuffix = ".debug"
