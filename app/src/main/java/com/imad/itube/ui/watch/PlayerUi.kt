@@ -184,6 +184,7 @@ fun PlayerControls(
     var visible by remember { mutableStateOf(true) }
     var interactionTick by remember { mutableIntStateOf(0) }
     var seekFeedback by remember { mutableStateOf<Pair<Boolean, Int>?>(null) } // (forward, seconds)
+    var speedBoost by remember { mutableStateOf(false) }
     var scrubbing by remember { mutableStateOf<Float?>(null) }
     val gestures = remember { PlayerGestureState() }
 
@@ -237,6 +238,8 @@ fun PlayerControls(
             .playerGestures(enabled = fullscreen, state = gestures)
             .pointerInput(seekSeconds) {
                 detectTapGestures(
+                    onPress = { holdForDoubleSpeed(player, viewConfiguration.longPressTimeoutMillis) { speedBoost = it } },
+                    onLongPress = {},
                     onTap = { visible = !visible; interactionTick++ },
                     onDoubleTap = { offset ->
                         val forward = offset.x > size.width / 2
@@ -272,6 +275,7 @@ fun PlayerControls(
 
         CaptionOverlay(player, lifted = visible)
         GestureFeedbackPill(gestures.feedback, Modifier.align(Alignment.TopCenter).padding(top = 48.dp))
+        DoubleSpeedPill(speedBoost, Modifier.align(Alignment.TopCenter).padding(top = 16.dp))
 
         if (ui.buffering && !visible) {
             CircularProgressIndicator(

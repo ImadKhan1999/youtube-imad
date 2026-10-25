@@ -44,7 +44,14 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.gestures.PressGestureScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.ui.text.font.FontWeight
+import androidx.media3.common.Player
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 /** Whether the full-screen video is zoomed to fill the screen (pinch out) or fitted (pinch in). */
@@ -195,5 +202,48 @@ private fun LevelBar(icon: androidx.compose.ui.graphics.vector.ImageVector, leve
         }
         Spacer(Modifier.height(6.dp))
         Text("${Math.round(level * 100)}%", color = Color.White, fontSize = 12.sp)
+    }
+}
+
+/**
+ * Hold-to-speed-up, like YouTube: once a press has been held for [holdMillis] while the video is
+ * playing, it plays at 2x until the finger is lifted (or the press turns into a drag), then goes
+ * back to the speed it had before. Call from detectTapGestures' onPress.
+ */
+suspend fun PressGestureScope.holdForDoubleSpeed(player: Player, holdMillis: Long, onBoost: (Boolean) -> Unit): Unit = coroutineScope {
+    var boosted = false
+    var normal = 1f
+    val timer = launch {
+        delay(holdMillis)
+        if (player.isPlaying) {
+            normal = player.playbackParameters.speed
+            player.setPlaybackSpeed(2f)
+            boosted = true
+            onBoost(true)
+        }
+    }
+    tryAwaitRelease()
+    timer.cancel()
+    if (boosted) {
+        player.setPlaybackSpeed(normal)
+        onBoost(false)
+    }
+    Unit
+}
+
+/** The "2x" pill shown while hold-to-speed-up is active. */
+@Composable
+fun DoubleSpeedPill(visible: Boolean, modifier: Modifier = Modifier) {
+    if (!visible) return
+    Row(
+        modifier
+            .clip(RoundedCornerShape(50))
+            .background(Color.Black.copy(alpha = 0.6f))
+            .padding(horizontal = 14.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("2x", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.width(4.dp))
+        Icon(Icons.Filled.FastForward, null, tint = Color.White, modifier = Modifier.size(18.dp))
     }
 }
