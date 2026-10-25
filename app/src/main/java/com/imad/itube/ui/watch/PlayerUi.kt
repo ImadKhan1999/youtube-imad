@@ -143,6 +143,8 @@ fun PlayerSurface(player: Player, modifier: Modifier = Modifier, keepScreenOn: B
                 setShutterBackgroundColor(android.graphics.Color.BLACK)
                 resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                 setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+                // Captions are drawn by CaptionOverlay instead, YouTube-style.
+                subtitleView?.visibility = android.view.View.GONE
                 this.player = player
             }
         },
@@ -264,6 +266,8 @@ fun PlayerControls(
                 }
             }
         }
+
+        CaptionOverlay(player, lifted = visible)
 
         if (ui.buffering && !visible) {
             CircularProgressIndicator(
