@@ -6,7 +6,18 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -21,9 +32,6 @@ import androidx.compose.material.icons.outlined.Subscriptions
 import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -37,9 +45,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import com.imad.itube.util.isTelevision
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -149,17 +158,36 @@ fun MainScreen(
     }
 
     LaunchedEffect(hasVideo) { if (!hasVideo) ui.collapse() }
-    val fullscreen = hasVideo && expanded && isLandscape
+    val context = LocalContext.current
+    val config = LocalConfiguration.current
+    val isTv = remember { context.isTelevision() }
+    // Tablets and foldables keep the watch page in landscape (two panes) and go full screen on request.
+    val largeScreen = config.smallestScreenWidthDp >= 600
+    var manualFullscreen by remember { mutableStateOf(false) }
+    LaunchedEffect(expanded) { if (!expanded) manualFullscreen = false }
+    val fullscreen = hasVideo && expanded && (isTv || manualFullscreen || (isLandscape && !largeScreen))
+    val wideWatch = largeScreen && isLandscape && !fullscreen
     LaunchedEffect(fullscreen) { host.onFullscreenChanged(fullscreen) }
     LaunchedEffect(hasVideo && expanded) { if (!(hasVideo && expanded)) host.releaseOrientation() }
 
     BackHandler(enabled = hasVideo && expanded) {
-        if (fullscreen) host.requestFullscreen(false) else ui.collapse()
+        when {
+            isTv -> ui.collapse()
+            manualFullscreen -> manualFullscreen = false
+            fullscreen -> host.requestFullscreen(false)
+            else -> ui.collapse()
+        }
     }
 
     val watchCallbacks = WatchCallbacks(
         onCollapse = ui::collapse,
-        onToggleFullscreen = { host.requestFullscreen(!fullscreen) },
+        onToggleFullscreen = {
+            when {
+                isTv -> {}
+                largeScreen -> manualFullscreen = !manualFullscreen
+                else -> host.requestFullscreen(!fullscreen)
+            }
+        },
         onEnterPip = host.enterPip,
         onBackground = {
             host.moveToBackground()
@@ -171,6 +199,8 @@ fun MainScreen(
         Box(Modifier.fillMaxSize().background(Yt.colors.background)) {
             Scaffold(
                 containerColor = Yt.colors.background,
+                // Each screen's top bar pads for the status bar itself; padding here too doubled it.
+                contentWindowInsets = WindowInsets(0, 0, 0, 0),
                 snackbarHost = { SnackbarHost(snackbar) },
                 bottomBar = {
                     Column {
@@ -189,7 +219,7 @@ fun MainScreen(
                 enter = slideInVertically { it },
                 exit = slideOutVertically { it },
             ) {
-                WatchScreen(fullscreen = fullscreen, callbacks = watchCallbacks)
+                WatchScreen(fullscreen = fullscreen, wide = wideWatch, callbacks = watchCallbacks)
             }
 
             UpdateHost()
@@ -207,30 +237,34 @@ fun MainScreen(
 private fun BottomBar(nav: NavHostController) {
     val entry by nav.currentBackStackEntryAsState()
     val current = entry?.destination?.route
-    Column {
-        HorizontalDivider(color = Yt.colors.divider)
-        NavigationBar(containerColor = Yt.colors.background, tonalElevation = 0.dp) {
+    Column(Modifier.background(Yt.colors.background)) {
+        HorizontalDivider(color = Yt.colors.divider, thickness = 0.5.dp)
+        // YouTube's bar is much shorter than Material's 80dp NavigationBar.
+        Row(Modifier.fillMaxWidth().navigationBarsPadding().height(52.dp)) {
             TABS.forEach { tab ->
                 val selected = current == tab.route
-                NavigationBarItem(
-                    selected = selected,
-                    onClick = {
-                        nav.navigate(tab.route) {
-                            popUpTo(nav.graph.findStartDestination().id) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    },
-                    icon = { Icon(if (selected) tab.selectedIcon else tab.icon, tab.label) },
-                    label = { Text(tab.label, fontSize = 11.sp) },
-                    colors = NavigationBarItemDefaults.colors(
-                        indicatorColor = Color.Transparent,
-                        selectedIconColor = Yt.colors.textPrimary,
-                        selectedTextColor = Yt.colors.textPrimary,
-                        unselectedIconColor = Yt.colors.textPrimary,
-                        unselectedTextColor = Yt.colors.textPrimary,
-                    ),
-                )
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .selectable(selected = selected, role = Role.Tab) {
+                            nav.navigate(tab.route) {
+                                popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Icon(
+                        if (selected) tab.selectedIcon else tab.icon,
+                        contentDescription = null,
+                        tint = Yt.colors.textPrimary,
+                        modifier = Modifier.size(24.dp),
+                    )
+                    Text(tab.label, fontSize = 10.sp, color = Yt.colors.textPrimary, maxLines = 1)
+                }
             }
         }
     }

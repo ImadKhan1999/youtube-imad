@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.imad.itube"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.imad.itube"

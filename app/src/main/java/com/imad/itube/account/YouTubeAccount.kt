@@ -47,9 +47,15 @@ class YouTubeAccount(private val http: OkHttpClient, private val store: AccountS
         return "SAPISIDHASH ${now}_" + digest.joinToString("") { "%02x".format(it) }
     }
 
-    private suspend fun call(endpoint: String, extra: JsonObject.() -> JsonObject = { this }): JsonElement =
+    /** One InnerTube call. With [requireAuth] false it also works signed out, just anonymously. */
+    internal suspend fun call(
+        endpoint: String,
+        requireAuth: Boolean = true,
+        extra: JsonObject.() -> JsonObject = { this },
+    ): JsonElement =
         withContext(Dispatchers.IO) {
-            val account = store.account.value ?: throw NotSignedInException()
+            val account = store.account.value
+            if (account == null && requireAuth) throw NotSignedInException()
             val base = buildJsonObject {
                 putJsonObject("context") {
                     putJsonObject("client") {
@@ -64,7 +70,6 @@ class YouTubeAccount(private val http: OkHttpClient, private val store: AccountS
             val request = Request.Builder()
                 .url("$ORIGIN/youtubei/v1/$endpoint?prettyPrint=false")
                 .post(body.toRequestBody("application/json".toMediaType()))
-                .header("Cookie", account.cookies)
                 .header("Origin", ORIGIN)
                 .header("X-Origin", ORIGIN)
                 .header("Referer", "$ORIGIN/")
@@ -72,7 +77,12 @@ class YouTubeAccount(private val http: OkHttpClient, private val store: AccountS
                 .header("X-Youtube-Client-Name", "1")
                 .header("X-Youtube-Client-Version", clientVersion())
                 .header("User-Agent", DESKTOP_UA)
-                .apply { sapisidHash(account.cookies)?.let { header("Authorization", it) } }
+                .apply {
+                    if (account != null) {
+                        header("Cookie", account.cookies)
+                        sapisidHash(account.cookies)?.let { header("Authorization", it) }
+                    }
+                }
                 .build()
             http.newCall(request).execute().use { res ->
                 if (res.code == 401 || res.code == 403) throw IOException("YouTube didn't accept the sign-in (HTTP ${res.code}). Try signing in again.")
@@ -81,7 +91,7 @@ class YouTubeAccount(private val http: OkHttpClient, private val store: AccountS
             }
         }
 
-    private suspend fun browse(browseId: String?, continuation: String?): JsonElement = call("browse") {
+    private suspend fun browse(browseId: String?, continuation: String?): JsonElement = call("browse", true) {
         buildJsonObject {
             if (continuation != null) put("continuation", continuation) else put("browseId", browseId)
         }

@@ -125,6 +125,21 @@ data class CommentItem(
     val replyCount: Int,
     val pinned: Boolean,
     val hearted: Boolean,
+    /** Opaque cursor for this comment's replies, if it has any. */
+    val replies: Any? = null,
+    /** Like / dislike / reply tokens, only present when signed in. */
+    val actions: CommentActions? = null,
+    val id: String? = null,
+)
+
+data class CommentActions(
+    val like: String?,
+    val unlike: String?,
+    val dislike: String?,
+    val undislike: String?,
+    val replyParams: String?,
+    val liked: Boolean,
+    val disliked: Boolean,
 )
 
 data class CommentsPage(
@@ -132,4 +147,6 @@ data class CommentsPage(
     val next: Any?,
     val totalCount: Int,
     val disabled: Boolean,
+    /** Token for posting a new top-level comment (signed in only). */
+    val postParams: String? = null,
 )

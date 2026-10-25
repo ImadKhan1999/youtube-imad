@@ -52,7 +52,7 @@ fun YtTopBar() {
             .fillMaxWidth()
             .background(Yt.colors.background)
             .statusBarsPadding()
-            .height(52.dp)
+            .height(48.dp)
             .padding(start = 14.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -81,7 +81,7 @@ fun BackTopBar(
             .fillMaxWidth()
             .background(Yt.colors.background)
             .statusBarsPadding()
-            .height(52.dp)
+            .height(48.dp)
             .padding(end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

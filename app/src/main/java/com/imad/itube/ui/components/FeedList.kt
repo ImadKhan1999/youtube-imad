@@ -1,6 +1,9 @@
 package com.imad.itube.ui.components
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -39,7 +42,9 @@ fun FeedList(
     emptyText: String = "Nothing here yet",
     header: (LazyListScope.() -> Unit)? = null,
 ) {
-    val content: @Composable () -> Unit = {
+    val content: @Composable () -> Unit = { BoxWithConstraints(Modifier.fillMaxSize()) {
+        // Tablets, foldables and TVs get a grid of cards, like YouTube on big screens.
+        val columns = if (compact) 1 else (maxWidth / 340.dp).toInt().coerceIn(1, 4)
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
@@ -53,7 +58,17 @@ fun FeedList(
                 }
                 state.loaded && state.items.isEmpty() -> item { EmptyBox(emptyText, modifier = Modifier.padding(top = 60.dp)) }
                 else -> {
-                    items(state.items, key = { it.url }) { FeedItemView(it, compact) }
+                    if (columns == 1) {
+                        items(state.items, key = { it.url }) { FeedItemView(it, compact) }
+                    } else {
+                        val rows = state.items.chunked(columns)
+                        items(rows, key = { it.first().url }) { row ->
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+                                row.forEach { Box(Modifier.weight(1f).padding(horizontal = 4.dp)) { FeedItemView(it, compact) } }
+                                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                            }
+                        }
+                    }
                     if (state.loadingMore) {
                         item {
                             Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
@@ -64,7 +79,7 @@ fun FeedList(
                 }
             }
         }
-    }
+    } }
 
     val shouldLoadMore by remember(listState) {
         derivedStateOf {

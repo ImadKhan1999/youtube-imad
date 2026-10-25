@@ -1,6 +1,7 @@
 package com.imad.itube.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -124,6 +125,9 @@ fun ITubeTheme(mode: ThemeMode = ThemeMode.System, content: @Composable () -> Un
         )
     }
     CompositionLocalProvider(LocalYtColors provides yt) {
-        MaterialTheme(colorScheme = scheme, typography = YtTypography, content = content)
+        MaterialTheme(colorScheme = scheme, typography = YtTypography) {
+            // Text outside a Surface/Scaffold (the watch page, overlays) would otherwise default to black.
+            CompositionLocalProvider(LocalContentColor provides yt.textPrimary, content = content)
+        }
     }
 }

@@ -6,6 +6,7 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -86,7 +87,7 @@ class WatchCallbacks(
 )
 
 @Composable
-fun WatchScreen(fullscreen: Boolean, callbacks: WatchCallbacks) {
+fun WatchScreen(fullscreen: Boolean, wide: Boolean, callbacks: WatchCallbacks) {
     val container = LocalContext.current.appContainer
     val controller = container.player
     val state by controller.state.collectAsState()
@@ -148,27 +149,37 @@ fun WatchScreen(fullscreen: Boolean, callbacks: WatchCallbacks) {
         }
     }
 
+    val swipeDown = Modifier.pointerInput(Unit) {
+        // Swipe the player down to drop into the mini player.
+        detectVerticalDragGestures(
+            onDragEnd = {
+                if (dragOffset > 120f) callbacks.onCollapse()
+                dragOffset = 0f
+            },
+            onDragCancel = { dragOffset = 0f },
+            onVerticalDrag = { _, dy -> dragOffset = (dragOffset + dy).coerceAtLeast(0f) },
+        )
+    }
     if (fullscreen) {
         playerBox(Modifier.fillMaxSize())
+    } else if (wide) {
+        // Big screens in landscape: player and details on the left, suggestions on the right.
+        Column(Modifier.fillMaxSize().background(Yt.colors.background)) {
+            Spacer(Modifier.fillMaxWidth().statusBarsPadding())
+            Row(Modifier.fillMaxSize()) {
+                Column(Modifier.weight(0.64f).fillMaxHeight()) {
+                    playerBox(Modifier.fillMaxWidth().aspectRatio(16f / 9f).then(swipeDown))
+                    WatchDetails(state, callbacks, showRelated = false)
+                }
+                LazyColumn(Modifier.weight(0.36f).fillMaxHeight(), contentPadding = PaddingValues(vertical = 8.dp)) {
+                    items(state.details?.related.orEmpty(), key = { "rel:" + it.url }) { FeedItemView(it, compact = true) }
+                }
+            }
+        }
     } else {
         Column(Modifier.fillMaxSize().background(Yt.colors.background)) {
             Spacer(Modifier.fillMaxWidth().background(Color.Black).statusBarsPadding())
-            playerBox(
-                Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-                    .pointerInput(Unit) {
-                        // Swipe the player down to drop into the mini player.
-                        detectVerticalDragGestures(
-                            onDragEnd = {
-                                if (dragOffset > 120f) callbacks.onCollapse()
-                                dragOffset = 0f
-                            },
-                            onDragCancel = { dragOffset = 0f },
-                            onVerticalDrag = { _, dy -> dragOffset = (dragOffset + dy).coerceAtLeast(0f) },
-                        )
-                    }
-            )
+            playerBox(Modifier.fillMaxWidth().aspectRatio(16f / 9f).then(swipeDown))
             WatchDetails(state, callbacks)
         }
     }
@@ -179,11 +190,12 @@ fun WatchScreen(fullscreen: Boolean, callbacks: WatchCallbacks) {
 }
 
 @Composable
-private fun WatchDetails(state: WatchState, callbacks: WatchCallbacks) {
+private fun WatchDetails(state: WatchState, callbacks: WatchCallbacks, showRelated: Boolean = true) {
     val details = state.details
     val controller = LocalContext.current.appContainer.player
     var showDescription by remember { mutableStateOf(false) }
     var showComments by remember { mutableStateOf(false) }
+    var showChat by remember { mutableStateOf(false) }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         when {
@@ -209,8 +221,12 @@ private fun WatchDetails(state: WatchState, callbacks: WatchCallbacks) {
                 if (state.queue.isNotEmpty()) {
                     item(key = "queue") { QueueCard(state) }
                 }
-                item(key = "comments") { CommentsTeaser(details.url) { showComments = true } }
-                items(details.related, key = { "rel:" + it.url }) { FeedItemView(it) }
+                if (details.isLive) {
+                    item(key = "chat") { LiveChatTeaser { showChat = true } }
+                } else {
+                    item(key = "comments") { CommentsTeaser(details.url) { showComments = true } }
+                }
+                if (showRelated) items(details.related, key = { "rel:" + it.url }) { FeedItemView(it) }
             }
             state.error != null -> item {
                 ErrorBox(state.error.orEmpty(), onRetry = controller::retry, Modifier.padding(top = 24.dp))
@@ -237,8 +253,11 @@ private fun WatchDetails(state: WatchState, callbacks: WatchCallbacks) {
     if (showDescription && details != null) {
         DescriptionSheet(details) { showDescription = false }
     }
+    if (showChat && details != null) {
+        LiveChatSheet(details.id) { showChat = false }
+    }
     if (showComments && details != null) {
-        CommentsSheet(details.url) { showComments = false }
+        CommentsSheet(details.url, details.id) { showComments = false }
     }
 }
 
@@ -489,7 +508,7 @@ private fun CommentsTeaser(videoUrl: String, onClick: () -> Unit) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(Yt.colors.chip)
-            .clickable(enabled = t is Teaser.Comment, onClick = onClick)
+            .clickable(enabled = t !is Teaser.Loading, onClick = onClick)
             .padding(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {

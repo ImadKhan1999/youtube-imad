@@ -144,7 +144,7 @@ class YouTubeRepository {
     suspend fun comments(videoUrl: String): CommentsPage = io {
         val info = CommentsInfo.getInfo(yt, videoUrl)
         CommentsPage(
-            comments = info.relatedItems.map { it.toComment() },
+            comments = info.relatedItems.map { it.toComment(videoUrl) },
             next = info.nextPage.validOrNull()?.let { CommentsCursor(videoUrl, it) },
             totalCount = info.commentsCount,
             disabled = info.isCommentsDisabled,
@@ -155,7 +155,7 @@ class YouTubeRepository {
         val c = cursor as CommentsCursor
         val page = CommentsInfo.getMoreItems(yt, c.url, c.page)
         CommentsPage(
-            comments = page.items.map { it.toComment() },
+            comments = page.items.map { it.toComment(c.url) },
             next = page.nextPageOrNull()?.let { CommentsCursor(c.url, it) },
             totalCount = -1,
             disabled = false,
@@ -249,7 +249,7 @@ class YouTubeRepository {
 
     private fun Page?.validOrNull(): Page? = this?.takeIf { Page.isValid(it) }
 
-    private fun CommentsInfoItem.toComment() = CommentItem(
+    private fun CommentsInfoItem.toComment(videoUrl: String) = CommentItem(
         author = uploaderName.orEmpty(),
         authorAvatar = uploaderAvatars.best(88),
         text = commentText?.let { d ->
@@ -265,6 +265,8 @@ class YouTubeRepository {
         replyCount = replyCount,
         pinned = isPinned,
         hearted = isHeartedByUploader,
+        replies = replies.validOrNull()?.takeIf { replyCount > 0 }?.let { CommentsCursor(videoUrl, it) },
+        id = commentId,
     )
 
     private suspend fun <T> io(block: suspend () -> T): T = withContext(Dispatchers.IO) { block() }

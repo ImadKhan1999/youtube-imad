@@ -41,6 +41,8 @@ class AppContainer(val app: Application) {
     val player = PlayerController(app, repository, settings, library, sponsorBlock, appScope)
     val accountStore = AccountStore(app, appScope)
     val account = YouTubeAccount(okHttp, accountStore)
+    val accountComments = com.imad.itube.account.AccountComments(account)
+    val liveChat = com.imad.itube.account.LiveChat(account)
     val updater = com.imad.itube.update.Updater(app, okHttp)
 
     /** Fetches the profile and copies the account's subscriptions into the library. */
