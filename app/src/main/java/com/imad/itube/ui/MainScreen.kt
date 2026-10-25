@@ -160,7 +160,10 @@ fun MainScreen(
     }
 
     if (isInPip) {
-        PlayerSurface(controller.player, Modifier.fillMaxSize())
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
+            PlayerSurface(controller.player, Modifier.fillMaxSize())
+            com.imad.itube.ui.watch.CaptionOverlay(controller.player, lifted = false)
+        }
         return
     }
 
