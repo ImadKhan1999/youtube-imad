@@ -183,6 +183,7 @@ fun PlayerControls(
     onNext: () -> Unit,
     modifier: Modifier = Modifier,
     chapters: List<Chapter> = emptyList(),
+    onChapters: () -> Unit = {},
 ) {
     var visible by remember { mutableStateOf(true) }
     var interactionTick by remember { mutableIntStateOf(0) }
@@ -389,13 +390,18 @@ fun PlayerControls(
                             fontSize = 12.sp,
                         )
                         chapters.at(shown)?.let { chapter ->
+                            // Tap the chapter name to open the chapter list, like YouTube.
                             Text(
-                                "  •  ${chapter.title}",
+                                "  •  ${chapter.title}  ›",
                                 color = Color.White,
                                 fontSize = 12.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false),
+                                modifier = Modifier
+                                    .weight(1f, fill = false)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable { onChapters(); interactionTick++ }
+                                    .padding(vertical = 6.dp, horizontal = 2.dp),
                             )
                         }
                     }
