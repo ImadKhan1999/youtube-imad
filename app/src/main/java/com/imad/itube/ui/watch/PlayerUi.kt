@@ -68,6 +68,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -504,12 +505,13 @@ fun SeekBar(
         modifier
             .fillMaxWidth()
             .height(20.dp)
+            // Track the real width on every layout: pointerInput only runs once, often before the
+            // bar has been measured, which left the thumb and chapter gaps pinned to the start.
+            .onSizeChanged { widthPx = it.width.toFloat().coerceAtLeast(1f) }
             .pointerInput(duration) {
-                widthPx = size.width.toFloat().coerceAtLeast(1f)
                 detectTapGestures(onTap = { o -> if (duration > 0) onSeek((o.x / widthPx).coerceIn(0f, 1f)) })
             }
             .pointerInput(duration) {
-                widthPx = size.width.toFloat().coerceAtLeast(1f)
                 detectHorizontalDragGestures(
                     onDragStart = { o ->
                         dragFraction = (o.x / widthPx).coerceIn(0f, 1f)
