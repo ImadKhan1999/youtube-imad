@@ -1,7 +1,7 @@
 package com.imad.itube.ui.watch
 
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,6 +18,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -29,8 +31,8 @@ import androidx.media3.common.text.CueGroup
 
 /**
  * Captions drawn the way the YouTube app does: centred near the bottom, sized to the player and
- * lifted above the progress bar while the controls are showing. White text with a soft dark
- * outline, no box behind it. The cues' own positions and colours are ignored on purpose, since
+ * lifted above the progress bar while the controls are showing. Netflix-style white text with
+ * a thin outline and soft shadow, no box behind it. The cues' own positions and colours are ignored on purpose, since
  * YouTube's auto-generated tracks park them on the left edge.
  */
 @Composable
@@ -45,31 +47,43 @@ fun CaptionOverlay(player: Player, lifted: Boolean, modifier: Modifier = Modifie
         player.addListener(listener)
         onDispose { player.removeListener(listener) }
     }
-    val bottom by animateDpAsState(if (lifted) 52.dp else 10.dp, label = "captionLift")
     if (lines.isEmpty()) return
     BoxWithConstraints(modifier.fillMaxSize()) {
-        // ~13sp in the portrait player, ~20sp full screen on a phone, capped for TVs.
-        val size = (maxHeight.value * 0.05f).coerceIn(11f, 24f)
+        // Netflix-style: fairly large (6% of the player height, ~12-15sp in
+        // the portrait player, ~22sp full screen), low in the frame, lifted over the controls.
+        val size = (maxHeight.value * 0.06f).coerceIn(12f, 30f)
+        val bottom by animateDpAsState(if (lifted) 56.dp else maxHeight * 0.06f, label = "captionLift")
         Column(
             Modifier
                 .align(Alignment.BottomCenter)
-                .padding(start = 16.dp, end = 16.dp, bottom = bottom),
+                .padding(start = 24.dp, end = 24.dp, bottom = bottom),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
-            lines.forEach { line ->
-                Text(
-                    line,
-                    color = Color.White,
-                    fontSize = size.sp,
-                    lineHeight = (size * 1.3f).sp,
-                    fontWeight = FontWeight.Medium,
-                    textAlign = TextAlign.Center,
-                    // No box: a soft dark outline keeps white text readable on bright video.
-                    style = TextStyle(shadow = Shadow(Color.Black, Offset(0f, 1.5f), blurRadius = 6f)),
-                )
-            }
+            lines.forEach { line -> CaptionLine(line, size) }
         }
+    }
+}
+
+/** White semi-bold text with a thin black outline and a soft drop shadow, no box. */
+@Composable
+private fun CaptionLine(text: String, size: Float) {
+    val base = TextStyle(
+        fontSize = size.sp,
+        lineHeight = (size * 1.25f).sp,
+        fontWeight = FontWeight.SemiBold,
+        textAlign = TextAlign.Center,
+    )
+    Box(contentAlignment = Alignment.Center) {
+        Text(
+            text,
+            color = Color.Black.copy(alpha = 0.85f),
+            style = base.copy(drawStyle = Stroke(width = size * 0.18f, join = StrokeJoin.Round)),
+        )
+        Text(
+            text,
+            color = Color.White,
+            style = base.copy(shadow = Shadow(Color.Black.copy(alpha = 0.8f), Offset(0f, 2f), blurRadius = 8f)),
+        )
     }
 }
 
@@ -83,4 +97,4 @@ private fun captionLines(cues: List<Cue>): List<String> =
         .filter { it.isNotEmpty() }
         .distinct()
         .toList()
-        .takeLast(3)
+        .takeLast(2)
