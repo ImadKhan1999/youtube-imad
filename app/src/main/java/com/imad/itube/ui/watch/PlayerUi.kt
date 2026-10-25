@@ -80,6 +80,8 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.imad.itube.ui.theme.YtRed
+import com.imad.itube.data.model.Chapter
+import com.imad.itube.data.model.at
 import com.imad.itube.util.Format
 import kotlinx.coroutines.delay
 
@@ -180,6 +182,7 @@ fun PlayerControls(
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     modifier: Modifier = Modifier,
+    chapters: List<Chapter> = emptyList(),
 ) {
     var visible by remember { mutableStateOf(true) }
     var interactionTick by remember { mutableIntStateOf(0) }
@@ -385,6 +388,16 @@ fun PlayerControls(
                             color = Color.White,
                             fontSize = 12.sp,
                         )
+                        chapters.at(shown)?.let { chapter ->
+                            Text(
+                                "  •  ${chapter.title}",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
+                        }
                     }
                     Spacer(Modifier.weight(1f))
                     IconButton(onClick = onToggleFullscreen) {
@@ -398,8 +411,28 @@ fun PlayerControls(
             }
         }
 
+        // While scrubbing, name the chapter under the finger, like YouTube.
+        val scrubChapter = scrubbing?.let { chapters.at((it * ui.duration).toLong()) }
+        if (scrubChapter != null) {
+            Text(
+                scrubChapter.title,
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = if (fullscreen) 64.dp else 44.dp, start = 24.dp, end = 24.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color.Black.copy(alpha = 0.6f))
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            )
+        }
+
         if (!isLive || liveSeekable) {
             SeekBar(
+                chapters = if (isLive) emptyList() else chapters,
                 position = ui.position,
                 buffered = ui.buffered,
                 duration = ui.duration,
@@ -446,6 +479,7 @@ private fun RoundControl(
 /** Thin red progress bar that grows a thumb while the controls are visible. */
 @Composable
 fun SeekBar(
+    chapters: List<Chapter> = emptyList(),
     position: Long,
     buffered: Long,
     duration: Long,
@@ -492,6 +526,14 @@ fun SeekBar(
         Box(Modifier.fillMaxWidth().height(barHeight).background(Color.White.copy(alpha = 0.3f)))
         Box(Modifier.fillMaxWidth(bufferedFraction).height(barHeight).background(Color.White.copy(alpha = 0.5f)))
         Box(Modifier.fillMaxWidth(playedFraction).height(barHeight).background(YtRed))
+        // Small gaps split the bar into chapters.
+        if (duration > 0) {
+            chapters.forEach { chapter ->
+                if (chapter.startMs <= 0 || chapter.startMs >= duration) return@forEach
+                val x = with(density) { (chapter.startMs.toFloat() / duration * widthPx).toDp() }
+                Box(Modifier.offset(x = x - 1.dp).width(2.dp).height(barHeight).background(Color.Black))
+            }
+        }
         if (showThumb || dragFraction != null) {
             val thumb = if (dragFraction != null) 16.dp else 12.dp
             val x = with(density) { (playedFraction * widthPx).toDp() } - thumb / 2

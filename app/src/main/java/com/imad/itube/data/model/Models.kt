@@ -55,6 +55,12 @@ data class ItemPage<T>(
     val hasMore: Boolean get() = next != null
 }
 
+/** One uploader-set chapter of a video. */
+data class Chapter(val title: String, val startMs: Long, val thumbnail: String? = null)
+
+/** The chapter playing at [positionMs], or null when there are no chapters. */
+fun List<Chapter>.at(positionMs: Long): Chapter? = lastOrNull { it.startMs <= positionMs } ?: firstOrNull()
+
 /** Everything the watch page shows about a video, apart from the streams themselves. */
 data class VideoDetails(
     val url: String,
@@ -77,6 +83,8 @@ data class VideoDetails(
     val tags: List<String>,
     val category: String?,
     val related: List<FeedItem>,
+    /** Uploader-set chapters, in order, the first one starting at 0. Empty when the video has none. */
+    val chapters: List<Chapter> = emptyList(),
 ) {
     fun toVideoItem() = VideoItem(
         url = url,

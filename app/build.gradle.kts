@@ -14,8 +14,8 @@ android {
         minSdk = 26
         targetSdk = 35
         // Release builds get these from the tag, e.g. v1.2.3 -> 1.2.3 (see .github/workflows/release.yml).
-        versionName = providers.gradleProperty("itubeVersionName").getOrElse("1.2.2")
-        versionCode = providers.gradleProperty("itubeVersionCode").map(String::toInt).getOrElse(10202)
+        versionName = providers.gradleProperty("itubeVersionName").getOrElse("1.2.3")
+        versionCode = providers.gradleProperty("itubeVersionCode").map(String::toInt).getOrElse(10203)
         vectorDrawables.useSupportLibrary = true
     }
 

@@ -140,6 +140,7 @@ fun WatchScreen(fullscreen: Boolean, wide: Boolean, callbacks: WatchCallbacks) {
                     onPopup = callbacks.onEnterPip,
                     onPrevious = controller::playPrevious,
                     onNext = controller::playNext,
+                    chapters = state.details?.chapters.orEmpty(),
                 )
             }
             if (state.loading && state.details == null) {
@@ -223,6 +224,9 @@ private fun WatchDetails(state: WatchState, callbacks: WatchCallbacks, showRelat
                 item(key = "title") { TitleBlock(details) { showDescription = true } }
                 item(key = "channel") { ChannelBlock(details) }
                 item(key = "actions") { ActionsRow(details, callbacks) }
+                if (details.chapters.isNotEmpty() && !details.isLive) {
+                    item(key = "chapters") { ChaptersRow(details) { controller.player.seekTo(it.startMs); controller.player.play() } }
+                }
                 if (state.queue.isNotEmpty()) {
                     item(key = "queue") { QueueCard(state) }
                 }
@@ -615,6 +619,63 @@ fun MiniPlayer(onExpand: () -> Unit, modifier: Modifier = Modifier) {
             }
             IconButton(onClick = controller::close) {
                 Icon(Icons.Filled.Close, contentDescription = "Close")
+            }
+        }
+    }
+}
+
+/** The uploader's chapters as a row of cards; tapping one jumps there. */
+@Composable
+private fun ChaptersRow(details: VideoDetails, onChapter: (com.imad.itube.data.model.Chapter) -> Unit) {
+    Column(Modifier.padding(top = 12.dp)) {
+        Text(
+            "Chapters",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 12.dp),
+        )
+        Spacer(Modifier.height(8.dp))
+        androidx.compose.foundation.lazy.LazyRow(
+            contentPadding = PaddingValues(horizontal = 12.dp),
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
+        ) {
+            items(details.chapters.size) { i ->
+                val chapter = details.chapters[i]
+                Column(
+                    Modifier
+                        .width(150.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { onChapter(chapter) },
+                ) {
+                    Box(Modifier.fillMaxWidth().height(84.dp).clip(RoundedCornerShape(10.dp)).background(Yt.colors.surface)) {
+                        AsyncImage(
+                            model = chapter.thumbnail ?: details.thumbnail,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        Text(
+                            Format.position(chapter.startMs),
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(4.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color.Black.copy(alpha = 0.75f))
+                                .padding(horizontal = 4.dp, vertical = 1.dp),
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        chapter.title,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }
