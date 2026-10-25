@@ -130,7 +130,7 @@ fun rememberPlayerUiState(player: Player): PlayerUiState {
 /** The video surface. Only one is composed at a time (full player, mini player or PiP). */
 @OptIn(UnstableApi::class)
 @Composable
-fun PlayerSurface(player: Player, modifier: Modifier = Modifier, keepScreenOn: Boolean = false) {
+fun PlayerSurface(player: Player, modifier: Modifier = Modifier, keepScreenOn: Boolean = false, zoomed: Boolean = false) {
     AndroidView(
         modifier = modifier.background(Color.Black),
         factory = { ctx ->
@@ -151,6 +151,7 @@ fun PlayerSurface(player: Player, modifier: Modifier = Modifier, keepScreenOn: B
         update = { view ->
             if (view.player !== player) view.player = player
             view.keepScreenOn = keepScreenOn
+            view.resizeMode = if (zoomed) AspectRatioFrameLayout.RESIZE_MODE_ZOOM else AspectRatioFrameLayout.RESIZE_MODE_FIT
         },
         onRelease = { it.player = null },
     )
@@ -184,6 +185,7 @@ fun PlayerControls(
     var interactionTick by remember { mutableIntStateOf(0) }
     var seekFeedback by remember { mutableStateOf<Pair<Boolean, Int>?>(null) } // (forward, seconds)
     var scrubbing by remember { mutableStateOf<Float?>(null) }
+    val gestures = remember { PlayerGestureState() }
 
     // Auto-hide after 3 s of playing without interaction.
     LaunchedEffect(visible, ui.isPlaying, interactionTick, scrubbing) {
@@ -232,6 +234,7 @@ fun PlayerControls(
                 }
             }
             .focusable()
+            .playerGestures(enabled = fullscreen, state = gestures)
             .pointerInput(seekSeconds) {
                 detectTapGestures(
                     onTap = { visible = !visible; interactionTick++ },
@@ -268,6 +271,7 @@ fun PlayerControls(
         }
 
         CaptionOverlay(player, lifted = visible)
+        GestureFeedbackPill(gestures.feedback, Modifier.align(Alignment.TopCenter).padding(top = 48.dp))
 
         if (ui.buffering && !visible) {
             CircularProgressIndicator(

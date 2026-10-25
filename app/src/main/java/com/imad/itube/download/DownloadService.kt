@@ -61,7 +61,10 @@ class DownloadService : Service() {
                 }
                 val done = manager.items.value.count { it.status == DownloadStatus.Done }
                 ServiceCompat.stopForeground(this@DownloadService, ServiceCompat.STOP_FOREGROUND_REMOVE)
-                NotificationManagerCompat.from(this@DownloadService).runCatching {
+                // Held for Wi-Fi or paused: no "finished" notification.
+                val idle = manager.waitingForWifi.value ||
+                    manager.items.value.any { it.status == DownloadStatus.Paused || it.status == DownloadStatus.Queued }
+                if (!idle) NotificationManagerCompat.from(this@DownloadService).runCatching {
                     notify(DONE_ID, NotificationCompat.Builder(this@DownloadService, CHANNEL)
                         .setSmallIcon(R.drawable.ic_notification)
                         .setContentTitle("Downloads finished")

@@ -20,7 +20,7 @@ import java.io.File
 enum class DownloadKind { Video, Audio }
 
 @Serializable
-enum class DownloadStatus { Queued, Running, Done, Failed, Cancelled }
+enum class DownloadStatus { Queued, Running, Paused, Done, Failed, Cancelled }
 
 @Serializable
 data class DownloadItem(

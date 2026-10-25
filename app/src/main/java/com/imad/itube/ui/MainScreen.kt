@@ -24,10 +24,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Slideshow
 import androidx.compose.material.icons.filled.Subscriptions
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Slideshow
 import androidx.compose.material.icons.outlined.Subscriptions
 import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.HorizontalDivider
@@ -91,6 +93,7 @@ private data class Tab(val route: String, val label: String, val icon: ImageVect
 
 private val TABS = listOf(
     Tab("home", "Home", Icons.Outlined.Home, Icons.Filled.Home),
+    Tab("shorts", "Shorts", Icons.Outlined.Slideshow, Icons.Filled.Slideshow),
     Tab("explore", "Explore", Icons.Outlined.Explore, Icons.Filled.Explore),
     Tab("subscriptions", "Subscriptions", Icons.Outlined.Subscriptions, Icons.Filled.Subscriptions),
     Tab("you", "You", Icons.Outlined.VideoLibrary, Icons.Filled.VideoLibrary),
@@ -291,6 +294,7 @@ private fun NavGraph(
     val back: () -> Unit = { nav.popBackStack() }
     NavHost(nav, startDestination = "home", modifier = modifier) {
         composable("home") { HomeScreen() }
+        composable("shorts") { com.imad.itube.ui.shorts.ShortsScreen() }
         composable("explore") { ExploreScreen(onOpenKiosk = { nav.navigate("kiosk/${it.name}") }) }
         composable("subscriptions") { SubscriptionsScreen() }
         composable("you") {

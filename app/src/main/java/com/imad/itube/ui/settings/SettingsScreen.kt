@@ -1,5 +1,10 @@
 package com.imad.itube.ui.settings
 
+import android.content.Intent
+import android.net.Uri
+import android.provider.DocumentsContract
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -46,6 +51,18 @@ fun SettingsScreen(onBack: () -> Unit) {
     val store = container.settings
     val s by store.settings.collectAsState()
     var choice by remember { mutableStateOf<Choice<*>?>(null) }
+    val context = LocalContext.current
+    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                )
+            }
+            store.update { it.copy(downloadFolder = uri.toString()) }
+        }
+    }
 
     ScreenScaffold(topBar = { BackTopBar("Settings", onBack) }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
@@ -99,6 +116,15 @@ fun SettingsScreen(onBack: () -> Unit) {
                     s.downloadQuality,
                 ) { v -> store.update { it.copy(downloadQuality = v) } }
             }
+            SwitchRow("Download over Wi-Fi only", "Downloads wait until you're on Wi-Fi", s.downloadWifiOnly) { v ->
+                store.update { it.copy(downloadWifiOnly = v) }
+            }
+            ValueRow("Download folder", folderLabel(s.downloadFolder)) { pickFolder.launch(null) }
+            if (s.downloadFolder != null) {
+                ValueRow("Use the default folder", "Movies/iTube and Music/iTube") {
+                    store.update { it.copy(downloadFolder = null) }
+                }
+            }
 
             Section("General")
             ValueRow("Appearance", s.theme.label()) {
@@ -141,6 +167,13 @@ fun SettingsScreen(onBack: () -> Unit) {
             containerColor = Yt.colors.surface,
         )
     }
+}
+
+/** "Download/iTube" style name for a picked folder. */
+private fun folderLabel(tree: String?): String {
+    tree ?: return "Movies/iTube and Music/iTube"
+    val id = runCatching { DocumentsContract.getTreeDocumentId(Uri.parse(tree)) }.getOrNull() ?: return "Custom folder"
+    return id.substringAfter(':').ifBlank { "Internal storage" }
 }
 
 private fun ThemeMode.label() = when (this) {

@@ -101,7 +101,7 @@ fun WatchScreen(fullscreen: Boolean, wide: Boolean, callbacks: WatchCallbacks) {
 
     val playerBox: @Composable (Modifier) -> Unit = { mod ->
         Box(mod.background(Color.Black)) {
-            PlayerSurface(controller.player, Modifier.fillMaxSize(), keepScreenOn = ui.isPlaying)
+            PlayerSurface(controller.player, Modifier.fillMaxSize(), keepScreenOn = ui.isPlaying, zoomed = fullscreen && PlayerZoom.zoomed)
             val title = state.details?.title ?: state.item?.title.orEmpty()
             if (state.error != null && state.details != null) {
                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)), contentAlignment = Alignment.Center) {
@@ -362,6 +362,7 @@ private fun ActionsRow(details: VideoDetails, callbacks: WatchCallbacks) {
     val saved = library.watchLater.any { it.url == details.url }
     var disliked by remember(details.url) { mutableStateOf(false) }
     val video = details.toVideoItem()
+    val dislikeCount by produceState<Long?>(null, details.id) { value = container.dislikes.dislikes(details.id) }
 
     LazyRow(
         contentPadding = PaddingValues(horizontal = 12.dp),
@@ -409,7 +410,13 @@ private fun ActionsRow(details: VideoDetails, callbacks: WatchCallbacks) {
                         .height(36.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(if (disliked) Icons.Filled.ThumbDown else Icons.Outlined.ThumbDown, "Dislike", Modifier.size(20.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(if (disliked) Icons.Filled.ThumbDown else Icons.Outlined.ThumbDown, "Dislike", Modifier.size(20.dp))
+                        dislikeCount?.let { n ->
+                            Spacer(Modifier.width(6.dp))
+                            Text(Format.compact(n + if (disliked) 1 else 0), style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
                 }
             }
         }

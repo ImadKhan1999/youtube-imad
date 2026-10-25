@@ -3,19 +3,26 @@ package com.imad.itube.download
 import android.app.Application
 import android.content.ContentValues
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.imad.itube.data.model.VideoItem
+import com.imad.itube.data.store.SettingsStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.job
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -34,11 +41,46 @@ import java.util.UUID
 class DownloadManager(
     private val app: Application,
     private val store: DownloadStore,
+    private val settings: SettingsStore,
     client: OkHttpClient,
 ) {
     private val downloader = StreamDownloader(client)
+    private val connectivity = app.getSystemService(ConnectivityManager::class.java)
 
     val items: StateFlow<List<DownloadItem>> get() = store.items
+
+    private val _waitingForWifi = MutableStateFlow(false)
+    /** True while queued downloads are held back because "Wi-Fi only" is on and we're not on Wi-Fi. */
+    val waitingForWifi: StateFlow<Boolean> = _waitingForWifi.asStateFlow()
+
+    init {
+        // Start held-back downloads when Wi-Fi comes back, and hold the running one if it drops.
+        runCatching {
+            connectivity?.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+                override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = onNetworkChanged()
+                override fun onLost(network: Network) = onNetworkChanged()
+            })
+        }
+    }
+
+    private fun onNetworkChanged() {
+        val allowed = networkAllowed()
+        if (allowed && store.items.value.any { it.status == DownloadStatus.Queued } && currentId == null) {
+            runCatching { startService() }
+        }
+        if (!allowed) {
+            currentId?.let { id ->
+                store.update(id) { if (it.status == DownloadStatus.Running) it.copy(status = DownloadStatus.Queued) else it }
+                currentJob?.cancel()
+            }
+        }
+    }
+
+    private fun networkAllowed(): Boolean {
+        if (!settings.settings.value.downloadWifiOnly) return true
+        val caps = connectivity?.getNetworkCapabilities(connectivity.activeNetwork) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+    }
 
     @Volatile private var currentId: String? = null
     @Volatile private var currentJob: Job? = null
@@ -49,7 +91,7 @@ class DownloadManager(
         val fresh = videos.filter { v ->
             existing.none {
                 it.video.url == v.url && it.kind == kind &&
-                    it.status in setOf(DownloadStatus.Queued, DownloadStatus.Running, DownloadStatus.Done)
+                    it.status in setOf(DownloadStatus.Queued, DownloadStatus.Running, DownloadStatus.Paused, DownloadStatus.Done)
             }
         }.map { DownloadItem(id = UUID.randomUUID().toString(), video = it, kind = kind, maxHeight = maxHeight) }
         if (fresh.isNotEmpty()) {
@@ -61,27 +103,66 @@ class DownloadManager(
 
     fun cancel(id: String) {
         store.update(id) { if (it.status == DownloadStatus.Done) it else it.copy(status = DownloadStatus.Cancelled) }
+        if (currentId == id) currentJob?.cancel() else partialDir(id).deleteRecursively()
+    }
+
+    /** Stops a download but keeps what it has so far, to carry on later. */
+    fun pause(id: String) {
+        store.update(id) {
+            if (it.status == DownloadStatus.Queued || it.status == DownloadStatus.Running) it.copy(status = DownloadStatus.Paused) else it
+        }
         if (currentId == id) currentJob?.cancel()
     }
 
+    fun resume(id: String) {
+        store.update(id) { if (it.status == DownloadStatus.Paused) it.copy(status = DownloadStatus.Queued) else it }
+        startService()
+    }
+
+    fun pauseAll() {
+        store.items.value.filter { it.status == DownloadStatus.Queued || it.status == DownloadStatus.Running }.forEach { pause(it.id) }
+    }
+
+    fun resumeAll() {
+        store.items.value.filter { it.status == DownloadStatus.Paused }.forEach {
+            store.update(it.id) { d -> d.copy(status = DownloadStatus.Queued) }
+        }
+        startService()
+    }
+
     fun retry(id: String) {
+        partialDir(id).deleteRecursively()
         store.update(id) { it.copy(status = DownloadStatus.Queued, error = null, progress = 0f, bytesDone = 0) }
         startService()
     }
+
+    private fun partialDir(id: String) = File(app.cacheDir, "dl/$id")
 
     fun delete(id: String) {
         cancel(id)
         store.get(id)?.fileUri?.let { uri ->
             runCatching {
                 val u = Uri.parse(uri)
-                if (u.scheme == "file") File(u.path!!).delete() else app.contentResolver.delete(u, null, null)
+                when {
+                    u.scheme == "file" -> File(u.path!!).delete()
+                    DocumentsContract.isDocumentUri(app, u) -> DocumentsContract.deleteDocument(app.contentResolver, u)
+                    else -> app.contentResolver.delete(u, null, null)
+                }
             }
         }
         store.remove(id)
     }
 
     private fun startService() {
-        ContextCompat.startForegroundService(app, Intent(app, DownloadService::class.java))
+        // From the background (e.g. Wi-Fi coming back) Android may refuse; the queue then
+        // carries on the next time the app is opened.
+        runCatching { ContextCompat.startForegroundService(app, Intent(app, DownloadService::class.java)) }
+    }
+
+    /** Picks up anything left queued, e.g. when the app is opened again. */
+    suspend fun resumePending() {
+        while (!store.loaded) delay(50)
+        if (store.items.value.any { it.status == DownloadStatus.Queued }) startService()
     }
 
     /** Runs queued downloads one by one until none are left. Called by [DownloadService]. */
@@ -89,6 +170,11 @@ class DownloadManager(
         while (!store.loaded) delay(50)
         while (true) {
             val next = store.items.value.firstOrNull { it.status == DownloadStatus.Queued } ?: break
+            if (!networkAllowed()) {
+                _waitingForWifi.value = true
+                break
+            }
+            _waitingForWifi.value = false
             currentId = next.id
             try {
                 withContext(Dispatchers.IO) {
@@ -96,17 +182,22 @@ class DownloadManager(
                     process(next, onUpdate)
                 }
             } catch (e: CancellationException) {
-                // Either this one download was cancelled (keep going) or the whole service stopped.
-                if (store.get(next.id)?.status != DownloadStatus.Cancelled) throw e
+                // Paused, cancelled or held for Wi-Fi: keep going. Otherwise the whole service stopped.
+                if (store.get(next.id)?.status == DownloadStatus.Running) throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Download failed", e)
                 store.update(next.id) { it.copy(status = DownloadStatus.Failed, error = e.message ?: "Download failed") }
             } finally {
                 currentId = null
                 currentJob = null
-                File(app.cacheDir, "dl/${next.id}").deleteRecursively()
+                // Paused and held-back downloads keep their partial files to resume from.
+                val status = store.get(next.id)?.status
+                if (status != DownloadStatus.Paused && status != DownloadStatus.Queued && status != DownloadStatus.Running) {
+                    partialDir(next.id).deleteRecursively()
+                }
             }
         }
+        if (store.items.value.none { it.status == DownloadStatus.Queued }) _waitingForWifi.value = false
         onUpdate(null)
     }
 
@@ -120,7 +211,7 @@ class DownloadManager(
         store.update(item.id) { it.copy(status = DownloadStatus.Running, error = null) }
         val info = StreamInfo.getInfo(ServiceList.YouTube, item.video.url)
         val plan = plan(info, item)
-        val dir = File(app.cacheDir, "dl/${item.id}").apply { mkdirs() }
+        val dir = partialDir(item.id).apply { mkdirs() }
 
         val parts: List<Stream> = when (plan) {
             is Plan.Muxed -> listOfNotNull(plan.video, plan.audio)
@@ -203,8 +294,13 @@ class DownloadManager(
         throw IllegalStateException("No downloadable video stream found")
     }
 
-    /** Copies the finished file into Movies/iTube or Music/iTube. */
+    /** Copies the finished file into the picked folder, or Movies/iTube or Music/iTube. */
     private fun publish(file: File, name: String, mime: String, audio: Boolean): Uri {
+        settings.settings.value.downloadFolder?.let { tree ->
+            runCatching { publishToTree(Uri.parse(tree), file, name, mime) }
+                .onSuccess { return it }
+                .onFailure { Log.w(TAG, "Couldn't save to the picked folder, using the default", it) }
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val resolver = app.contentResolver
             val collection = if (audio) {
@@ -241,6 +337,21 @@ class DownloadManager(
         while (target.exists()) target = File(dir, name.substringBeforeLast('.') + " ($i)." + name.substringAfterLast('.')).also { i++ }
         file.copyTo(target)
         return Uri.fromFile(target)
+    }
+
+    private fun publishToTree(tree: Uri, file: File, name: String, mime: String): Uri {
+        val resolver = app.contentResolver
+        val parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+        val uri = DocumentsContract.createDocument(resolver, parent, mime, name)
+            ?: throw IllegalStateException("Couldn't create the file")
+        try {
+            resolver.openOutputStream(uri)?.use { out -> file.inputStream().use { it.copyTo(out) } }
+                ?: throw IllegalStateException("Couldn't write the file")
+        } catch (e: Exception) {
+            runCatching { DocumentsContract.deleteDocument(resolver, uri) }
+            throw e
+        }
+        return uri
     }
 
     private fun safeName(title: String): String =

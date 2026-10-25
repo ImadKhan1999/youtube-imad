@@ -8,6 +8,8 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
+import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
 import android.util.Rational
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -51,6 +53,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         addOnPictureInPictureModeChangedListener(pipListener)
+        lifecycleScope.launch { runCatching { appContainer.downloads.resumePending() } }
 
         val host = HostCallbacks(
             enterPip = { enterPip() },
