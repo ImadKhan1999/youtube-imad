@@ -24,6 +24,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.animation.animateContentSize
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.ThumbDown
@@ -442,7 +445,7 @@ private fun ActionsRow(details: VideoDetails, callbacks: WatchCallbacks) {
         }
         item { ActionChip(Icons.Outlined.Share, "Share") { actions.share(details.title, details.url) } }
         if (!details.isLive) {
-            item { ActionChip(Icons.Outlined.Download, "Download") { callbacks.onDownload(video) } }
+            item { DownloadChip(video) { callbacks.onDownload(video) } }
         }
         item {
             ActionChip(if (saved) Icons.Filled.WatchLater else Icons.Outlined.WatchLater, if (saved) "Saved" else "Save") {
@@ -706,6 +709,63 @@ private fun ChaptersRow(details: VideoDetails, onChapter: (com.imad.itube.data.m
             positionMs = controller.player.currentPosition,
             onPick = { onChapter(it); showAll = false },
             onDismiss = { showAll = false },
+        )
+    }
+}
+
+/** The Download chip, which shows this video's download as it happens: a progress ring, then a tick. */
+@Composable
+private fun DownloadChip(video: VideoItem, onClick: () -> Unit) {
+    val downloads = LocalContext.current.appContainer.downloads
+    val items by downloads.items.collectAsState()
+    val mine = items.lastOrNull {
+        it.video.url == video.url && it.status in setOf(
+            com.imad.itube.download.DownloadStatus.Queued,
+            com.imad.itube.download.DownloadStatus.Running,
+            com.imad.itube.download.DownloadStatus.Paused,
+            com.imad.itube.download.DownloadStatus.Done,
+        )
+    }
+    val progress by androidx.compose.animation.core.animateFloatAsState(mine?.progress ?: 0f, label = "dl")
+    Row(
+        Modifier
+            .height(36.dp)
+            .clip(RoundedCornerShape(50))
+            .background(Yt.colors.chip)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp)
+            .animateContentSize(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        androidx.compose.animation.Crossfade(mine?.status, label = "dlicon") { status ->
+            Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
+                when (status) {
+                    com.imad.itube.download.DownloadStatus.Queued ->
+                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = com.imad.itube.ui.brand.ImadLabs.CyberMint)
+                    com.imad.itube.download.DownloadStatus.Running, com.imad.itube.download.DownloadStatus.Paused ->
+                        CircularProgressIndicator(
+                            progress = { progress.coerceIn(0.02f, 1f) },
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = com.imad.itube.ui.brand.ImadLabs.CyberMint,
+                            trackColor = Yt.colors.divider,
+                        )
+                    com.imad.itube.download.DownloadStatus.Done ->
+                        Icon(Icons.Filled.CheckCircle, null, Modifier.size(20.dp), tint = com.imad.itube.ui.brand.ImadLabs.CyberMint)
+                    else -> Icon(Icons.Outlined.Download, null, Modifier.size(20.dp))
+                }
+            }
+        }
+        Spacer(Modifier.width(6.dp))
+        Text(
+            when (mine?.status) {
+                com.imad.itube.download.DownloadStatus.Queued -> "Queued"
+                com.imad.itube.download.DownloadStatus.Running -> "${Math.round(progress * 100)}%"
+                com.imad.itube.download.DownloadStatus.Paused -> "Paused"
+                com.imad.itube.download.DownloadStatus.Done -> "Downloaded"
+                else -> "Download"
+            },
+            style = MaterialTheme.typography.labelLarge,
         )
     }
 }

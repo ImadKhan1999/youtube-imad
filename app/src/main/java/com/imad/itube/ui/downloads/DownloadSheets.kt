@@ -69,7 +69,8 @@ fun DownloadSheet(request: DownloadRequest.Single, onDismiss: () -> Unit) {
     val heights = request.heights.distinct().sortedDescending().ifEmpty { PRESETS.filter { it <= 1080 } }
     fun start(kind: DownloadKind, height: Int) {
         val n = container.downloads.enqueue(listOf(request.video), kind, height)
-        actions.toast(if (n > 0) "Downloading… see You > Downloads" else "Already downloaded or in the queue")
+        // A new download gets the animated banner; only say something here when nothing was added.
+        if (n == 0) actions.toast("Already downloaded or in the queue")
         onDismiss()
     }
     ModalBottomSheet(
@@ -227,7 +228,7 @@ fun PlaylistDownloadSheet(request: DownloadRequest.Playlist, onDismiss: () -> Un
                 val kind = if (h == 0) DownloadKind.Audio else DownloadKind.Video
                 container.settings.update { it.copy(downloadQuality = h) }
                 val n = container.downloads.enqueue(chosen, kind, if (h == 0) 0 else h)
-                actions.toast("Added $n to Downloads")
+                if (n == 0) actions.toast("Already downloaded or in the queue")
                 onDismiss()
             }
         }

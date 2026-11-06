@@ -20,7 +20,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.job
@@ -52,6 +55,10 @@ class DownloadManager(
     private val _waitingForWifi = MutableStateFlow(false)
     /** True while queued downloads are held back because "Wi-Fi only" is on and we're not on Wi-Fi. */
     val waitingForWifi: StateFlow<Boolean> = _waitingForWifi.asStateFlow()
+
+    private val _started = MutableSharedFlow<List<DownloadItem>>(extraBufferCapacity = 4)
+    /** Newly queued downloads, for the "Download started" banner. */
+    val started: SharedFlow<List<DownloadItem>> = _started.asSharedFlow()
 
     init {
         // Start held-back downloads when Wi-Fi comes back, and hold the running one if it drops.
@@ -97,6 +104,7 @@ class DownloadManager(
         if (fresh.isNotEmpty()) {
             store.add(fresh)
             startService()
+            _started.tryEmit(fresh)
         }
         return fresh.size
     }
