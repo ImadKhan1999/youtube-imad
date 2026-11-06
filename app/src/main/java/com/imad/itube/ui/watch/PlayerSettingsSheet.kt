@@ -40,7 +40,7 @@ import com.imad.itube.player.WatchState
 import com.imad.itube.ui.theme.Yt
 import com.imad.itube.ui.theme.YtRed
 
-private enum class Page { Main, Quality, Speed, Audio, Captions }
+private enum class Page { Main, Quality, LiveQuality, Speed, Audio, Captions }
 
 val SPEEDS = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 3f)
 
@@ -62,11 +62,14 @@ fun PlayerSettingsSheet(state: WatchState, controller: PlayerController, onDismi
             when (page) {
                 Page.Main -> {
                     val q = when {
-                        state.isLive -> "Auto"
+                        state.isLive -> state.liveHeight?.let { "${it}p" }
+                            ?: ("Auto" + (controller.liveCurrentHeight()?.let { " (${it}p)" } ?: ""))
                         state.selectedQuality == null -> "Auto" + (state.autoQuality?.let { " (${it.label})" } ?: "")
                         else -> state.selectedQuality.label
                     }
-                    if (!state.offline) SettingRow(Icons.Outlined.Tune, "Quality", q) { if (!state.isLive) page = Page.Quality }
+                    if (!state.offline) SettingRow(Icons.Outlined.Tune, "Quality", q) {
+                        page = if (state.isLive) Page.LiveQuality else Page.Quality
+                    }
                     SettingRow(Icons.Outlined.SlowMotionVideo, "Playback speed", speedLabel(state.speed)) { page = Page.Speed }
                     SettingRow(
                         Icons.Outlined.ClosedCaption,
@@ -115,6 +118,31 @@ fun PlayerSettingsSheet(state: WatchState, controller: PlayerController, onDismi
                             null,
                             selected = state.selectedQuality?.label == option.label,
                         ) { controller.selectQuality(option); onDismiss() }
+                    }
+                }
+
+                Page.LiveQuality -> {
+                    Header("Quality for current video") { page = Page.Main }
+                    val heights = controller.liveQualities()
+                    OptionRow(
+                        "Auto" + (controller.liveCurrentHeight()?.let { " (${it}p)" } ?: ""),
+                        "Adjusts to give you the best experience",
+                        selected = state.liveHeight == null,
+                    ) { controller.selectLiveQuality(null); onDismiss() }
+                    heights.forEach { h ->
+                        OptionRow(
+                            "${h}p" + if (h >= 720) "  HD" else "",
+                            null,
+                            selected = state.liveHeight == h,
+                        ) { controller.selectLiveQuality(h); onDismiss() }
+                    }
+                    if (heights.isEmpty()) {
+                        Text(
+                            "Qualities appear once the stream starts playing.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Yt.colors.textSecondary,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                        )
                     }
                 }
 

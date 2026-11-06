@@ -13,6 +13,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import com.imad.itube.data.SkipSegment
@@ -66,6 +67,8 @@ data class WatchState(
     val queueIndex: Int = -1,
     val queueTitle: String? = null,
     val skipSegments: List<SkipSegment> = emptyList(),
+    /** Live streams: the chosen HLS variant height, null for Auto. */
+    val liveHeight: Int? = null,
 ) {
     val activeQuality: QualityOption? get() = selectedQuality ?: autoQuality
 }
@@ -167,6 +170,7 @@ class PlayerController(
         player.stop()
         player.clearMediaItems()
         info = null
+        clearLiveQuality()
         _state.value = WatchState(
             item = item,
             loading = true,
@@ -213,6 +217,45 @@ class PlayerController(
     fun selectQuality(option: QualityOption?) {
         _state.update { it.copy(selectedQuality = option) }
         rebuildSource()
+    }
+
+    /**
+     * Live streams come as one HLS playlist with a variant per resolution, so their qualities are
+     * the video tracks the player found in it (highest first), not the extractor's stream list.
+     */
+    fun liveQualities(): List<Int> =
+        player.currentTracks.groups
+            .filter { it.type == C.TRACK_TYPE_VIDEO }
+            .flatMap { g -> (0 until g.length).map { g.getTrackFormat(it).height } }
+            .filter { it > 0 }
+            .distinct()
+            .sortedDescending()
+
+    /** The height the live stream is playing at right now. */
+    fun liveCurrentHeight(): Int? = player.videoFormat?.height?.takeIf { it > 0 }
+
+    /** Pins a live stream to one resolution (the best variant at that height), or back to Auto. */
+    fun selectLiveQuality(height: Int?) {
+        val params = player.trackSelectionParameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_VIDEO)
+        if (height != null) {
+            val group = player.currentTracks.groups.firstOrNull { g ->
+                g.type == C.TRACK_TYPE_VIDEO && (0 until g.length).any { g.getTrackFormat(it).height == height }
+            }
+            if (group != null) {
+                val index = (0 until group.length)
+                    .filter { group.getTrackFormat(it).height == height }
+                    .maxByOrNull { group.getTrackFormat(it).bitrate }!!
+                params.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, index))
+            }
+        }
+        player.trackSelectionParameters = params.build()
+        _state.update { it.copy(liveHeight = height) }
+    }
+
+    private fun clearLiveQuality() {
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_VIDEO)
+            .build()
     }
 
     fun selectAudioTrack(option: AudioTrackOption) {
