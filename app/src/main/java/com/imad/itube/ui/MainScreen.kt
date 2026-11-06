@@ -237,6 +237,10 @@ fun MainScreen(
 
             UpdateHost()
             com.imad.itube.ui.brand.WelcomeHost()
+            com.imad.itube.ui.downloads.DownloadStartedBanner(onOpenDownloads = {
+                ui.collapse()
+                nav.navigate("downloads") { launchSingleTop = true }
+            })
             if (showCast) CastDialog { showCast = false }
 
             when (val r = downloadRequest) {
