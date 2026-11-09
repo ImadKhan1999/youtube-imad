@@ -14,8 +14,8 @@ android {
         minSdk = 26
         targetSdk = 35
         // Release builds get these from the tag, e.g. v1.2.3 -> 1.2.3 (see .github/workflows/release.yml).
-        versionName = providers.gradleProperty("itubeVersionName").getOrElse("1.2.7")
-        versionCode = providers.gradleProperty("itubeVersionCode").map(String::toInt).getOrElse(10207)
+        versionName = providers.gradleProperty("itubeVersionName").getOrElse("1.2.8")
+        versionCode = providers.gradleProperty("itubeVersionCode").map(String::toInt).getOrElse(10208)
         vectorDrawables.useSupportLibrary = true
     }
 
@@ -108,10 +108,12 @@ dependencies {
     implementation(libs.media3.exoplayer.hls)
     implementation(libs.media3.session)
     implementation(libs.media3.ui)
+    implementation(libs.media3.datasource.okhttp)
 
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.okhttp)
+    implementation(libs.okhttp.dnsoverhttps)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
 

@@ -29,6 +29,7 @@ class AppContainer(val app: Application) {
     val okHttp: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
+        .dns(com.imad.itube.data.net.FallbackDns)
         .build()
 
     val downloader = NewPipeDownloader(okHttp)

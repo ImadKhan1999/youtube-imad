@@ -2,15 +2,18 @@ package com.imad.itube.player
 
 import android.net.Uri
 import androidx.annotation.OptIn
+import android.util.Log
 import androidx.media3.common.C
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
-import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.TransferListener
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import com.imad.itube.data.net.NewPipeDownloader
 import org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Wraps an [HttpDataSource] and rewrites requests to googlevideo `videoplayback` URLs the way
@@ -22,18 +25,26 @@ import org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper
  * - the User-Agent matches the client the stream URL was issued to.
  *
  * Without this, YouTube throttles or rejects many adaptive streams.
+ *
+ * If the edge host in the URL (`rrN---sn-….googlevideo.com`) can't be reached at all (DNS failure,
+ * refused or reset connection), the request is retried once through
+ * `redirector.googlevideo.com`, which redirects to an edge server that works for this network.
  */
 @OptIn(UnstableApi::class)
 class YoutubeDataSource private constructor(
-    private val upstream: HttpDataSource,
+    private val upstreamFactory: HttpDataSource.Factory,
     private val rangeParameterEnabled: Boolean,
     private val rnParameterEnabled: Boolean,
 ) : DataSource {
 
     private var requestNumber = 0L
+    private val listeners = ArrayList<TransferListener>(1)
+    private var upstream: HttpDataSource = upstreamFactory.createDataSource()
 
-    override fun addTransferListener(transferListener: TransferListener) =
+    override fun addTransferListener(transferListener: TransferListener) {
+        listeners += transferListener
         upstream.addTransferListener(transferListener)
+    }
 
     override fun open(dataSpec: DataSpec): Long {
         val url = dataSpec.uri.toString()
@@ -80,8 +91,38 @@ class YoutubeDataSource private constructor(
             .build()
             .withAdditionalHeaders(headers)
 
-        return upstream.open(spec)
+        return openWithHostFallback(spec)
     }
+
+    private fun openWithHostFallback(spec: DataSpec): Long {
+        val host = spec.uri.host.orEmpty()
+        val isEdgeHost = EDGE_HOST.matches(host)
+        if (isEdgeHost && unreachableHosts.containsKey(host)) return upstream.open(viaRedirector(spec))
+        try {
+            return upstream.open(spec)
+        } catch (e: HttpDataSource.HttpDataSourceException) {
+            if (!isEdgeHost || !isConnectionFailure(e)) throw e
+            Log.w(TAG, "Can't reach $host, retrying through $REDIRECTOR_HOST", e)
+            unreachableHosts[host] = true
+            runCatching { upstream.close() }
+            upstream = upstreamFactory.createDataSource().also { ds -> listeners.forEach(ds::addTransferListener) }
+            try {
+                return upstream.open(viaRedirector(spec))
+            } catch (retry: HttpDataSource.HttpDataSourceException) {
+                retry.addSuppressed(e)
+                throw retry
+            }
+        }
+    }
+
+    private fun viaRedirector(spec: DataSpec): DataSpec =
+        spec.buildUpon().setUri(spec.uri.buildUpon().authority(REDIRECTOR_HOST).build()).build()
+
+    private fun isConnectionFailure(e: HttpDataSource.HttpDataSourceException): Boolean =
+        e !is HttpDataSource.InvalidResponseCodeException &&
+            e !is HttpDataSource.InvalidContentTypeException &&
+            (e.reason == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
+                e.reason == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT)
 
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
         upstream.read(buffer, offset, length)
@@ -96,17 +137,19 @@ class YoutubeDataSource private constructor(
         private val rangeParameterEnabled: Boolean,
         private val rnParameterEnabled: Boolean,
     ) : DataSource.Factory {
-        private val httpFactory = DefaultHttpDataSource.Factory()
-            .setAllowCrossProtocolRedirects(true)
-            .setKeepPostFor302Redirects(true)
-            .setConnectTimeoutMs(15_000)
-            .setReadTimeoutMs(20_000)
+        private val httpFactory = OkHttpDataSource.Factory(StreamHttp.client)
 
         override fun createDataSource(): DataSource =
-            YoutubeDataSource(httpFactory.createDataSource(), rangeParameterEnabled, rnParameterEnabled)
+            YoutubeDataSource(httpFactory, rangeParameterEnabled, rnParameterEnabled)
     }
 
     private companion object {
+        const val TAG = "YoutubeDataSource"
+        const val REDIRECTOR_HOST = "redirector.googlevideo.com"
+        val EDGE_HOST by lazy { Regex("""rr\d+---sn-[a-z0-9-]+\.googlevideo\.com""") }
+
+        /** Edge hosts this network couldn't reach; later requests go to the redirector directly. */
+        val unreachableHosts = ConcurrentHashMap<String, Boolean>()
         const val YOUTUBE_BASE_URL = "https://www.youtube.com"
         val POST_BODY = byteArrayOf(0x78, 0)
     }
