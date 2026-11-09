@@ -8,7 +8,6 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.dash.DashMediaSource
 import androidx.media3.exoplayer.dash.DefaultDashChunkSource
 import androidx.media3.exoplayer.dash.manifest.DashManifest
@@ -20,7 +19,6 @@ import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.source.SingleSampleMediaSource
 import androidx.media3.datasource.DefaultDataSource
 import com.imad.itube.data.isLive
-import com.imad.itube.data.net.NewPipeDownloader
 import org.schabi.newpipe.extractor.services.youtube.dashmanifestcreators.YoutubeOtfDashManifestCreator
 import org.schabi.newpipe.extractor.services.youtube.dashmanifestcreators.YoutubePostLiveStreamDvrDashManifestCreator
 import org.schabi.newpipe.extractor.services.youtube.dashmanifestcreators.YoutubeProgressiveDashManifestCreator
@@ -45,9 +43,7 @@ class MediaSourceBuilder {
     private val ytDash = YoutubeDataSource.Factory(rangeParameterEnabled = true, rnParameterEnabled = true)
     private val ytProgressive = YoutubeDataSource.Factory(rangeParameterEnabled = false, rnParameterEnabled = true)
     private val ytHls = YoutubeDataSource.Factory(rangeParameterEnabled = false, rnParameterEnabled = false)
-    private val plainHttp = DefaultHttpDataSource.Factory()
-        .setUserAgent(NewPipeDownloader.USER_AGENT)
-        .setAllowCrossProtocolRedirects(true)
+    private val plainHttp = StreamHttp.plainFactory()
 
     class BuildException(message: String, cause: Throwable? = null) : Exception(message, cause)
 

@@ -138,7 +138,7 @@ class PlayerController(
                     val position = player.currentPosition
                     _state.value.item?.let { load(it, position, keepState = true) }
                 } else {
-                    _state.update { it.copy(error = "Playback error: ${error.errorCodeName}") }
+                    _state.update { it.copy(error = describeError(error)) }
                 }
             }
         })
@@ -146,6 +146,24 @@ class PlayerController(
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
             .build()
         scope.launch { sponsorTicker() }
+    }
+
+    /** The error code plus the underlying cause, so a screenshot says what actually failed. */
+    private fun describeError(error: PlaybackException): String {
+        var root: Throwable = error
+        while (root.cause != null && root.cause !== root) root = root.cause!!
+        val hint = when (root) {
+            is java.net.UnknownHostException ->
+                "Couldn't look up YouTube's video server. If you use Private DNS or an ad blocker, it may be blocking googlevideo.com."
+            is java.net.SocketTimeoutException -> "YouTube's video server didn't answer in time."
+            is java.net.ConnectException, is java.net.SocketException, is javax.net.ssl.SSLException ->
+                "Couldn't connect to YouTube's video server (${root.javaClass.simpleName})."
+            else -> root.message?.takeIf { root !== error }?.take(160)
+        }
+        return buildString {
+            append("Playback error: ").append(error.errorCodeName)
+            if (!hint.isNullOrBlank()) append("\n").append(hint)
+        }
     }
 
     // ---- public API ---------------------------------------------------------------------
