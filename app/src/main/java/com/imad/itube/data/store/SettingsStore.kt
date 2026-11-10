@@ -35,7 +35,7 @@ data class Settings(
     val seekSeconds: Int = 10,
     val sponsorBlock: Boolean = true,
     /** Soft glow of the video's colours around the player (dark theme), like YouTube. */
-    val ambientMode: Boolean = true,
+    val ambientMode: Boolean = false,
     val captionsLanguage: String? = null,
     val checkUpdates: Boolean = true,
     val downloadQuality: Int = 720,
@@ -94,7 +94,7 @@ class SettingsStore(private val context: Context, private val scope: CoroutineSc
             ?: ThemeMode.System,
         seekSeconds = this[Keys.seek] ?: 10,
         sponsorBlock = this[Keys.sponsor] ?: true,
-        ambientMode = this[Keys.ambient] ?: true,
+        ambientMode = this[Keys.ambient] ?: false,
         captionsLanguage = this[Keys.captions]?.takeIf { it.isNotEmpty() },
         checkUpdates = this[Keys.updates] ?: true,
         downloadQuality = this[Keys.dlQuality] ?: 720,
