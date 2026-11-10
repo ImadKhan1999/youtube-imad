@@ -1,6 +1,8 @@
 package com.imad.itube.ui.watch
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -140,10 +142,19 @@ fun WatchScreen(fullscreen: Boolean, wide: Boolean, callbacks: WatchCallbacks) {
     var showSettings by remember { mutableStateOf(false) }
     var panel by remember { mutableStateOf<WatchPanel?>(null) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
+    // Ambient mode: like YouTube, only in dark theme and never in full screen.
+    val ambientOn = settings.ambientMode && !fullscreen && Yt.colors.background.luminance() < 0.5f
+    val ambient = remember { AmbientFrames() }
 
     val playerBox: @Composable (Modifier) -> Unit = { mod ->
-        Box(mod.background(Color.Black)) {
-            PlayerSurface(controller.player, Modifier.fillMaxSize(), keepScreenOn = ui.isPlaying, zoomed = fullscreen && PlayerZoom.zoomed)
+        Box(if (ambientOn) mod else mod.background(Color.Black)) {
+            PlayerSurface(
+                controller.player,
+                Modifier.fillMaxSize(),
+                keepScreenOn = ui.isPlaying,
+                zoomed = fullscreen && PlayerZoom.zoomed,
+                ambient = if (ambientOn) ambient else null,
+            )
             val title = state.details?.title ?: state.item?.title.orEmpty()
             if (state.error != null && state.details != null) {
                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)), contentAlignment = Alignment.Center) {
@@ -277,9 +288,14 @@ fun WatchScreen(fullscreen: Boolean, wide: Boolean, callbacks: WatchCallbacks) {
         Column(Modifier.fillMaxSize().background(Yt.colors.background)) {
             Spacer(Modifier.fillMaxWidth().statusBarsPadding())
             Row(Modifier.fillMaxSize()) {
-                Column(Modifier.weight(0.64f).fillMaxHeight()) {
-                    playerBox(Modifier.fillMaxWidth().aspectRatio(16f / 9f).then(swipeDown))
-                    WatchDetails(state, callbacks, showRelated = false, onOpenPanel = { panel = it })
+                BoxWithConstraints(Modifier.weight(0.64f).fillMaxHeight()) {
+                    if (ambientOn) {
+                        AmbientGlow(ambient, ui.isPlaying, state.item?.url, Modifier.fillMaxWidth().height(maxWidth * 9f / 16f + 200.dp))
+                    }
+                    Column(Modifier.fillMaxSize()) {
+                        playerBox(Modifier.fillMaxWidth().aspectRatio(16f / 9f).then(swipeDown))
+                        WatchDetails(state, callbacks, showRelated = false, onOpenPanel = { panel = it })
+                    }
                 }
                 Box(Modifier.weight(0.36f).fillMaxHeight()) {
                     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
@@ -292,14 +308,21 @@ fun WatchScreen(fullscreen: Boolean, wide: Boolean, callbacks: WatchCallbacks) {
             }
         }
     } else {
-        Column(Modifier.fillMaxSize().background(Yt.colors.background)) {
-            Spacer(Modifier.fillMaxWidth().background(Color.Black).statusBarsPadding())
-            playerBox(Modifier.fillMaxWidth().aspectRatio(16f / 9f).then(swipeDown))
-            // Like YouTube in portrait, panels slide up under the video and never cover it.
-            Box(Modifier.fillMaxWidth().weight(1f)) {
-                WatchDetails(state, callbacks, onOpenPanel = { panel = it })
-                PanelSlide(visible = panel != null, fromSide = false) {
-                    panelContent(Modifier.fillMaxSize().navigationBarsPadding().imePadding())
+        BoxWithConstraints(Modifier.fillMaxSize().background(Yt.colors.background)) {
+            if (ambientOn) {
+                // Behind the status bar, the video and the top of the details, fading out below.
+                val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                AmbientGlow(ambient, ui.isPlaying, state.item?.url, Modifier.fillMaxWidth().height(statusBar + maxWidth * 9f / 16f + 220.dp))
+            }
+            Column(Modifier.fillMaxSize()) {
+                Spacer(Modifier.fillMaxWidth().then(if (ambientOn) Modifier else Modifier.background(Color.Black)).statusBarsPadding())
+                playerBox(Modifier.fillMaxWidth().aspectRatio(16f / 9f).then(swipeDown))
+                // Like YouTube in portrait, panels slide up under the video and never cover it.
+                Box(Modifier.fillMaxWidth().weight(1f)) {
+                    WatchDetails(state, callbacks, onOpenPanel = { panel = it })
+                    PanelSlide(visible = panel != null, fromSide = false) {
+                        panelContent(Modifier.fillMaxSize().navigationBarsPadding().imePadding())
+                    }
                 }
             }
         }
