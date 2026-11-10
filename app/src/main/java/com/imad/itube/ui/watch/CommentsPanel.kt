@@ -1,11 +1,28 @@
 package com.imad.itube.ui.watch
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.filled.SubdirectoryArrowRight
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
@@ -32,9 +49,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -72,8 +86,26 @@ private sealed interface SheetRow {
     data class MoreReplies(val parentKey: String, val cursor: Any) : SheetRow
 }
 
+/** Comments as a bottom sheet, for Shorts (where YouTube also uses a sheet). */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CommentsSheet(videoUrl: String, videoId: String, onDismiss: () -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Yt.colors.surface, dragHandle = null) {
+        CommentsPanel(
+            videoUrl,
+            videoId,
+            onClose = onDismiss,
+            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.9f).navigationBarsPadding().imePadding(),
+        )
+    }
+}
+
+/**
+ * YouTube's comments panel. It opens under the video in portrait (the video keeps playing in
+ * view) and in the side column on tablets.
+ */
+@Composable
+fun CommentsPanel(videoUrl: String, videoId: String, onClose: () -> Unit, modifier: Modifier = Modifier) {
     val container = LocalContext.current.appContainer
     val actions = LocalAppActions.current
     val repo = container.repository
@@ -242,16 +274,9 @@ fun CommentsSheet(videoUrl: String, videoId: String, onDismiss: () -> Unit) {
         }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Yt.colors.surface) {
-        Column(Modifier.fillMaxWidth().fillMaxHeight(0.9f).navigationBarsPadding().imePadding()) {
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Comments", style = MaterialTheme.typography.titleLarge)
-                if (total > 0) {
-                    Spacer(Modifier.width(8.dp))
-                    Text(Format.compact(total.toLong()), color = Yt.colors.textSecondary)
-                }
-            }
-            HorizontalDivider(color = Yt.colors.divider)
+    Column(modifier.background(Yt.colors.surface)) {
+        Column(Modifier.fillMaxSize()) {
+            PanelHeader("Comments", onClose, trailing = total.takeIf { it > 0 }?.let { Format.compact(it.toLong()) })
             LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().weight(1f)) {
                 itemsIndexed(rows) { index, row ->
                     when (row) {
@@ -275,14 +300,22 @@ fun CommentsSheet(videoUrl: String, videoId: String, onDismiss: () -> Unit) {
                             },
                             onToggleReplies = { toggleReplies(row.item) },
                         )
-                        is SheetRow.MoreReplies -> Text(
-                            "Show more replies",
-                            color = LinkBlue,
-                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                            modifier = Modifier
+                        is SheetRow.MoreReplies -> Row(
+                            Modifier
+                                .padding(start = 60.dp, top = 2.dp, bottom = 6.dp)
+                                .clip(RoundedCornerShape(50))
                                 .clickable { loadMoreReplies(row) }
-                                .padding(start = 68.dp, top = 6.dp, bottom = 10.dp),
-                        )
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.Filled.SubdirectoryArrowRight, null, Modifier.size(16.dp), tint = LinkBlue)
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                "Show more replies",
+                                color = LinkBlue,
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                            )
+                        }
                     }
                 }
                 if (loading) {
@@ -312,21 +345,33 @@ fun CommentsSheet(videoUrl: String, videoId: String, onDismiss: () -> Unit) {
                     }
                 }
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Avatar(account?.avatar, 28.dp, name = account?.name)
-                    Spacer(Modifier.width(8.dp))
-                    OutlinedTextField(
+                    Avatar(account?.avatar, 32.dp, name = account?.name)
+                    Spacer(Modifier.width(10.dp))
+                    BasicTextField(
                         value = draft,
                         onValueChange = { draft = it },
-                        placeholder = { Text(if (replyTo != null) "Add a reply…" else "Add a comment…") },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Yt.colors.chip)
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = Yt.colors.textPrimary),
+                        cursorBrush = SolidColor(Yt.colors.textPrimary),
                         maxLines = 4,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(onSend = { send() }),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Yt.colors.textPrimary,
-                            unfocusedBorderColor = Yt.colors.divider,
-                            cursorColor = Yt.colors.textPrimary,
-                        ),
+                        decorationBox = { inner ->
+                            Box {
+                                if (draft.isEmpty()) {
+                                    Text(
+                                        if (replyTo != null) "Add a reply…" else "Add a comment…",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Yt.colors.textSecondary,
+                                    )
+                                }
+                                inner()
+                            }
+                        },
                     )
                     IconButton(onClick = ::send, enabled = draft.isNotBlank() && !sending) {
                         if (sending) {
@@ -353,49 +398,115 @@ private fun CommentRow(
 ) {
     val liked = c.actions?.liked == true
     val disliked = c.actions?.disliked == true
-    Row(Modifier.fillMaxWidth().padding(start = if (depth > 0) 56.dp else 16.dp, end = 8.dp, top = 10.dp)) {
-        Avatar(c.authorAvatar, if (depth > 0) 24.dp else 28.dp, name = c.author)
+    var textExpanded by remember(c.id, c.text) { mutableStateOf(false) }
+    var overflows by remember(c.id, c.text) { mutableStateOf(false) }
+    val secondary = Yt.colors.textSecondary
+    Row(Modifier.fillMaxWidth().padding(start = if (depth > 0) 60.dp else 12.dp, end = 4.dp, top = 12.dp)) {
+        Avatar(c.authorAvatar, if (depth > 0) 24.dp else 32.dp, name = c.author)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             if (c.pinned) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.PushPin, null, Modifier.size(12.dp), tint = Yt.colors.textSecondary)
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 2.dp)) {
+                    Icon(Icons.Outlined.PushPin, null, Modifier.size(12.dp), tint = secondary)
                     Spacer(Modifier.width(4.dp))
-                    Text("Pinned", style = MaterialTheme.typography.bodySmall, color = Yt.colors.textSecondary)
+                    Text("Pinned", fontSize = 12.sp, color = secondary)
                 }
             }
-            Text(Format.joinDot(c.author, c.published), style = MaterialTheme.typography.bodySmall, color = Yt.colors.textSecondary)
-            Spacer(Modifier.height(2.dp))
-            Text(c.text, style = MaterialTheme.typography.bodyMedium)
+            // "@handle · 2 years ago", with the creator's name in a grey pill like YouTube.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onLike, modifier = Modifier.size(36.dp)) {
+                val nameMod = if (c.isCreator) {
+                    Modifier.clip(RoundedCornerShape(50)).background(Yt.colors.chip).padding(horizontal = 6.dp, vertical = 1.dp)
+                } else {
+                    Modifier
+                }
+                Row(nameMod, verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        c.author,
+                        fontSize = 12.sp,
+                        color = if (c.isCreator) Yt.colors.textPrimary else secondary,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (c.verified) {
+                        Spacer(Modifier.width(3.dp))
+                        Icon(Icons.Filled.CheckCircle, "Verified", Modifier.size(11.dp), tint = secondary)
+                    }
+                }
+                c.published?.takeIf { it.isNotBlank() }?.let {
+                    Text(" · $it", fontSize = 12.sp, color = secondary, maxLines = 1)
+                }
+            }
+            Spacer(Modifier.height(3.dp))
+            Text(
+                c.text,
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, lineHeight = 20.sp),
+                maxLines = if (textExpanded) Int.MAX_VALUE else 5,
+                overflow = TextOverflow.Ellipsis,
+                onTextLayout = { if (!textExpanded) overflows = it.hasVisualOverflow },
+            )
+            if (overflows || textExpanded) {
+                Text(
+                    if (textExpanded) "Show less" else "Read more",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = secondary,
+                    modifier = Modifier.clickable { textExpanded = !textExpanded }.padding(top = 4.dp),
+                )
+            }
+            // Like · count · dislike · reply, then the creator's heart, as on YouTube.
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                IconButton(onClick = onLike, modifier = Modifier.size(34.dp).padding(end = 0.dp)) {
                     Icon(if (liked) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp, "Like", Modifier.size(16.dp))
                 }
                 val likes = c.likes
                 if (!likes.isNullOrBlank()) {
-                    Text(likes, style = MaterialTheme.typography.bodySmall, color = Yt.colors.textSecondary)
+                    Text(likes, fontSize = 12.sp, color = secondary)
+                    Spacer(Modifier.width(6.dp))
                 }
-                Spacer(Modifier.width(4.dp))
-                IconButton(onClick = onDislike, modifier = Modifier.size(36.dp)) {
+                IconButton(onClick = onDislike, modifier = Modifier.size(34.dp)) {
                     Icon(if (disliked) Icons.Filled.ThumbDown else Icons.Outlined.ThumbDown, "Dislike", Modifier.size(16.dp))
                 }
-                if (c.hearted) {
-                    Icon(Icons.Filled.Favorite, "Hearted by creator", Modifier.size(14.dp), tint = YtRed)
-                    Spacer(Modifier.width(8.dp))
+                IconButton(onClick = onReply, modifier = Modifier.size(34.dp)) {
+                    Icon(Icons.Outlined.ChatBubbleOutline, "Reply", Modifier.size(16.dp))
                 }
-                Text(
-                    "Reply",
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                    modifier = Modifier.clickable(onClick = onReply).padding(horizontal = 8.dp, vertical = 8.dp),
-                )
+                if (c.hearted) {
+                    Spacer(Modifier.width(6.dp))
+                    Box(Modifier.size(20.dp)) {
+                        Icon(Icons.Filled.AccountCircle, null, Modifier.size(18.dp), tint = secondary)
+                        Icon(
+                            Icons.Filled.Favorite,
+                            "Hearted by creator",
+                            Modifier.size(11.dp).align(Alignment.BottomEnd),
+                            tint = YtRed,
+                        )
+                    }
+                }
             }
             if (depth == 0 && c.replyCount > 0 && c.replies != null) {
-                Text(
-                    if (repliesOpen) "Hide replies" else "${c.replyCount} ${if (c.replyCount == 1) "reply" else "replies"}",
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                    color = LinkBlue,
-                    modifier = Modifier.clickable(onClick = onToggleReplies).padding(vertical = 6.dp),
-                )
+                Row(
+                    Modifier
+                        .offset(x = (-12).dp)
+                        .clip(RoundedCornerShape(50))
+                        .clickable(onClick = onToggleReplies)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        if (repliesOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                        null,
+                        Modifier.size(18.dp),
+                        tint = LinkBlue,
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        if (repliesOpen) "Hide replies" else "${c.replyCount} ${if (c.replyCount == 1) "reply" else "replies"}",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = LinkBlue,
+                    )
+                }
             }
         }
     }

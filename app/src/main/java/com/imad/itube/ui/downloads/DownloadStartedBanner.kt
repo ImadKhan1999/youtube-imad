@@ -51,13 +51,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
 import com.imad.itube.appContainer
 import com.imad.itube.download.DownloadItem
 import com.imad.itube.download.DownloadStatus
@@ -151,11 +149,9 @@ private fun BannerCard(item: DownloadItem, count: Int, finished: Boolean, failed
                 )
             }
             Spacer(Modifier.width(10.dp))
-            AsyncImage(
-                model = item.video.thumbnail,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.width(64.dp).height(36.dp).clip(RoundedCornerShape(6.dp)).background(Color.Black),
+            com.imad.itube.ui.components.HiResImage(
+                item.video.thumbnail,
+                Modifier.width(64.dp).height(36.dp).clip(RoundedCornerShape(6.dp)).background(Color.Black),
             )
             Spacer(Modifier.width(10.dp))
             Text("View", color = ImadLabs.CyberMint, fontWeight = FontWeight.Bold, fontSize = 14.sp)

@@ -68,11 +68,34 @@ class YouTubeRepository {
 
     suspend fun kiosk(kiosk: Kiosk): ItemPage<FeedItem> = io {
         val url = yt.kioskList.getListLinkHandlerFactoryByType(kiosk.id).fromId(kiosk.id).url
-        val info = KioskInfo.getInfo(yt, url)
-        ItemPage(info.relatedItems.map { it.toVideoItem() }, info.nextPage.validOrNull()?.let { KioskCursor(url, it) })
+        // KioskInfo.getInfo also reads the kiosk's page title, and YouTube's podcasts page no
+        // longer has one ("Could not get channel name"), which failed the whole list. Only the
+        // videos are needed, so read the first page straight from the extractor.
+        val first = runCatching {
+            val extractor = yt.kioskList.getExtractorByUrl(url, null)
+            extractor.fetchPage()
+            val page = extractor.initialPage
+            val items: List<FeedItem> = page.items.filterIsInstance<StreamInfoItem>().map { it.toVideoItem() }
+            val next = if (page.hasNextPage()) page.nextPage.validOrNull() else null
+            ItemPage(items, next?.let { KioskCursor(url, it) })
+        }
+        // If YouTube's podcasts page can't be read at all, show podcast episodes from search instead.
+        if (kiosk == Kiosk.Podcasts && first.getOrNull()?.items.isNullOrEmpty()) {
+            return@io runCatching { podcastSearch() }.getOrElse { first.getOrThrow() }
+        }
+        first.getOrThrow()
     }
 
+    /** Fallback when YouTube's podcasts page has no episodes we can read: full podcast episodes from search. */
+    private suspend fun podcastSearch(): ItemPage<FeedItem> {
+        return search("podcast full episode", SearchFilter.Videos).onlyEpisodes()
+    }
+
+    private fun ItemPage<FeedItem>.onlyEpisodes() =
+        copy(items = items.filter { it is VideoItem && !it.isShort && !it.isLive })
+
     suspend fun kioskMore(cursor: Any): ItemPage<FeedItem> = io {
+        if (cursor is SearchCursor) return@io searchMore(cursor).onlyEpisodes()
         val c = cursor as KioskCursor
         val page = KioskInfo.getMoreItems(yt, c.url, c.page)
         ItemPage(page.items.map { it.toVideoItem() }, page.nextPageOrNull()?.let { KioskCursor(c.url, it) })
@@ -296,6 +319,8 @@ class YouTubeRepository {
         hearted = isHeartedByUploader,
         replies = replies.validOrNull()?.takeIf { replyCount > 0 }?.let { CommentsCursor(videoUrl, it) },
         id = commentId,
+        isCreator = runCatching { isChannelOwner }.getOrDefault(false),
+        verified = runCatching { isUploaderVerified }.getOrDefault(false),
     )
 
     private suspend fun <T> io(block: suspend () -> T): T = withContext(Dispatchers.IO) { block() }
