@@ -368,45 +368,48 @@ fun PlayerControls(
                         .padding(start = 12.dp, end = 4.dp, bottom = if (fullscreen) 28.dp else 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (isLive) {
-                        // Red at the live edge; grey when you've seeked back. Tap to jump to live.
-                        val behind = runCatching { player.currentLiveOffset }.getOrDefault(C.TIME_UNSET)
-                        val atEdge = behind == C.TIME_UNSET || behind < 20_000 || !liveSeekable
-                        Box(
-                            Modifier
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(if (atEdge) YtRed else Color.White.copy(alpha = 0.3f))
-                                .clickable { player.seekToDefaultPosition(); interactionTick++ }
-                                .padding(horizontal = 6.dp, vertical = 2.dp),
-                        ) { Text("LIVE", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                        if (!atEdge && behind != C.TIME_UNSET) {
-                            Spacer(Modifier.width(8.dp))
-                            Text("-${Format.position(behind)}", color = Color.White, fontSize = 12.sp)
-                        }
-                    } else {
-                        val shown = scrubbing?.let { (it * ui.duration).toLong() } ?: ui.position
-                        Text(
-                            "${Format.position(shown)} / ${Format.position(ui.duration)}",
-                            color = Color.White,
-                            fontSize = 12.sp,
-                        )
-                        chapters.at(shown)?.let { chapter ->
-                            // Tap the chapter name to open the chapter list, like YouTube.
+                    // Time and chapter take the free space so the full-screen button stays at the
+                    // far right. (Two weighted children here left a gap after a short chapter name.)
+                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                        if (isLive) {
+                            // Red at the live edge; grey when you've seeked back. Tap to jump to live.
+                            val behind = runCatching { player.currentLiveOffset }.getOrDefault(C.TIME_UNSET)
+                            val atEdge = behind == C.TIME_UNSET || behind < 20_000 || !liveSeekable
+                            Box(
+                                Modifier
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(if (atEdge) YtRed else Color.White.copy(alpha = 0.3f))
+                                    .clickable { player.seekToDefaultPosition(); interactionTick++ }
+                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                            ) { Text("LIVE", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                            if (!atEdge && behind != C.TIME_UNSET) {
+                                Spacer(Modifier.width(8.dp))
+                                Text("-${Format.position(behind)}", color = Color.White, fontSize = 12.sp)
+                            }
+                        } else {
+                            val shown = scrubbing?.let { (it * ui.duration).toLong() } ?: ui.position
                             Text(
-                                "  •  ${chapter.title}  ›",
+                                "${Format.position(shown)} / ${Format.position(ui.duration)}",
                                 color = Color.White,
                                 fontSize = 12.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier
-                                    .weight(1f, fill = false)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .clickable { onChapters(); interactionTick++ }
-                                    .padding(vertical = 6.dp, horizontal = 2.dp),
                             )
+                            chapters.at(shown)?.let { chapter ->
+                                // Tap the chapter name to open the chapter list, like YouTube.
+                                Text(
+                                    "  •  ${chapter.title}  ›",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier
+                                        .weight(1f, fill = false)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .clickable { onChapters(); interactionTick++ }
+                                        .padding(vertical = 6.dp, horizontal = 2.dp),
+                                )
+                            }
                         }
                     }
-                    Spacer(Modifier.weight(1f))
                     IconButton(onClick = onToggleFullscreen) {
                         Icon(
                             if (fullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
