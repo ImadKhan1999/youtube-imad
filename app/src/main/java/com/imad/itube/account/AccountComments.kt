@@ -82,6 +82,8 @@ class AccountComments(private val api: YouTubeAccount) {
             hearted = state.str("heartState") == "TOOLBAR_HEART_STATE_HEARTED",
             replies = repliesToken?.let(::Cursor),
             id = entity.str("properties", "commentId"),
+            isCreator = entity.str("author", "isCreator") == "true",
+            verified = entity.str("author", "isVerified") == "true" || entity.str("author", "isArtist") == "true",
             actions = CommentActions(
                 like = action("likeCommand"),
                 unlike = action("unlikeCommand"),

@@ -138,6 +138,9 @@ data class CommentItem(
     /** Like / dislike / reply tokens, only present when signed in. */
     val actions: CommentActions? = null,
     val id: String? = null,
+    /** Written by the video's own channel (shown with a grey name pill, like YouTube). */
+    val isCreator: Boolean = false,
+    val verified: Boolean = false,
 )
 
 data class CommentActions(

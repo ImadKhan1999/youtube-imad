@@ -1,6 +1,30 @@
 package com.imad.itube.ui.watch
 
 import androidx.compose.foundation.background
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -58,13 +82,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
 import com.imad.itube.appContainer
 import com.imad.itube.account.Rating
 import kotlinx.coroutines.launch
@@ -75,6 +97,7 @@ import com.imad.itube.player.WatchState
 import com.imad.itube.ui.components.Avatar
 import com.imad.itube.ui.components.ErrorBox
 import com.imad.itube.ui.components.FeedItemView
+import com.imad.itube.ui.components.HiResImage
 import com.imad.itube.ui.components.LocalAppActions
 import com.imad.itube.ui.components.PillButton
 import com.imad.itube.ui.components.VerifiedBadge
@@ -91,6 +114,21 @@ class WatchCallbacks(
     val onDownload: (VideoItem) -> Unit,
 )
 
+/** Lists that open beside (full screen) or under (portrait) the video instead of over it. */
+enum class WatchPanel { Chapters, Comments }
+
+/** Slides a panel in from the bottom (portrait) or the right (tablet side column). */
+@Composable
+private fun PanelSlide(visible: Boolean, fromSide: Boolean, content: @Composable () -> Unit) {
+    val spec = tween<IntOffset>(durationMillis = 320, easing = FastOutSlowInEasing)
+    AnimatedVisibility(
+        visible = visible,
+        enter = (if (fromSide) slideInHorizontally(spec) { it } else slideInVertically(spec) { it }) + fadeIn(tween(200)),
+        exit = (if (fromSide) slideOutHorizontally(spec) { it } else slideOutVertically(spec) { it }) + fadeOut(tween(200)),
+        modifier = Modifier.fillMaxSize(),
+    ) { content() }
+}
+
 @Composable
 fun WatchScreen(fullscreen: Boolean, wide: Boolean, callbacks: WatchCallbacks) {
     val container = LocalContext.current.appContainer
@@ -100,7 +138,7 @@ fun WatchScreen(fullscreen: Boolean, wide: Boolean, callbacks: WatchCallbacks) {
     val settings by container.settings.settings.collectAsState()
     val ui = rememberPlayerUiState(controller.player)
     var showSettings by remember { mutableStateOf(false) }
-    var showChapters by remember { mutableStateOf(false) }
+    var panel by remember { mutableStateOf<WatchPanel?>(null) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
 
     val playerBox: @Composable (Modifier) -> Unit = { mod ->
@@ -145,17 +183,12 @@ fun WatchScreen(fullscreen: Boolean, wide: Boolean, callbacks: WatchCallbacks) {
                     onPrevious = controller::playPrevious,
                     onNext = controller::playNext,
                     chapters = state.details?.chapters.orEmpty(),
-                    onChapters = { showChapters = true },
+                    onChapters = { panel = WatchPanel.Chapters },
                 )
             }
             if (state.loading && state.details == null) {
                 // Show the thumbnail while the streams load, like YouTube does.
-                AsyncImage(
-                    model = state.item?.thumbnail,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
+                HiResImage(state.item?.thumbnail, Modifier.fillMaxSize())
             }
         }
     }
@@ -171,8 +204,74 @@ fun WatchScreen(fullscreen: Boolean, wide: Boolean, callbacks: WatchCallbacks) {
             onVerticalDrag = { _, dy -> dragOffset = (dragOffset + dy).coerceAtLeast(0f) },
         )
     }
+
+    // Panels (chapters, comments) close when the video changes, and on back.
+    LaunchedEffect(state.item?.url) { panel = null }
+    BackHandler(enabled = panel != null) { panel = null }
+
+    val details = state.details
+    val chapters = details?.chapters.orEmpty()
+    // Remember the last panel while it animates out, so its content doesn't vanish mid-slide.
+    var lastPanel by remember { mutableStateOf<WatchPanel?>(null) }
+    SideEffect { if (panel != null) lastPanel = panel }
+    val shownPanel = panel ?: lastPanel
+    val panelContent: @Composable (Modifier) -> Unit = { mod ->
+        when (shownPanel) {
+            WatchPanel.Chapters -> if (chapters.isNotEmpty()) {
+                ChaptersPanel(
+                    chapters = chapters,
+                    fallbackThumbnail = details?.thumbnail,
+                    positionMs = { ui.position },
+                    onPick = {
+                        controller.player.seekTo(it.startMs)
+                        controller.player.play()
+                        // In full screen the list stays open, like YouTube; below the video it closes.
+                        if (!fullscreen) panel = null
+                    },
+                    onClose = { panel = null },
+                    modifier = mod,
+                )
+            }
+            WatchPanel.Comments -> if (details != null) {
+                CommentsPanel(details.url, details.id, onClose = { panel = null }, modifier = mod)
+            }
+            null -> {}
+        }
+        Unit
+    }
+
     if (fullscreen) {
-        playerBox(Modifier.fillMaxSize())
+        // YouTube's full-screen panel: the video shrinks to the left and the list slides in on
+        // the right. Both sides animate together on one eased fraction.
+        val open = panel != null
+        val fraction by animateFloatAsState(
+            targetValue = if (open) 1f else 0f,
+            animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing),
+            label = "panel",
+        )
+        BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
+            val panelWidth = (maxWidth * 0.4f).coerceIn(300.dp, 440.dp).coerceAtMost(maxWidth * 0.55f)
+            val shown = panelWidth * fraction
+            playerBox(Modifier.align(Alignment.CenterStart).width(maxWidth - shown).fillMaxHeight())
+            if (fraction > 0f) {
+                Box(
+                    Modifier
+                        .align(Alignment.CenterEnd)
+                        .width(shown)
+                        .fillMaxHeight()
+                        .clipToBounds(),
+                ) {
+                    // Laid out at full width and slid in, so text never re-wraps while animating.
+                    panelContent(
+                        Modifier
+                            .requiredWidth(panelWidth)
+                            .fillMaxHeight()
+                            .align(Alignment.CenterStart)
+                            .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.End)),
+                    )
+                }
+            }
+        }
     } else if (wide) {
         // Big screens in landscape: player and details on the left, suggestions on the right.
         Column(Modifier.fillMaxSize().background(Yt.colors.background)) {
@@ -180,10 +279,15 @@ fun WatchScreen(fullscreen: Boolean, wide: Boolean, callbacks: WatchCallbacks) {
             Row(Modifier.fillMaxSize()) {
                 Column(Modifier.weight(0.64f).fillMaxHeight()) {
                     playerBox(Modifier.fillMaxWidth().aspectRatio(16f / 9f).then(swipeDown))
-                    WatchDetails(state, callbacks, showRelated = false)
+                    WatchDetails(state, callbacks, showRelated = false, onOpenPanel = { panel = it })
                 }
-                LazyColumn(Modifier.weight(0.36f).fillMaxHeight(), contentPadding = PaddingValues(vertical = 8.dp)) {
-                    items(state.details?.related.orEmpty(), key = { "rel:" + it.url }) { FeedItemView(it, compact = true) }
+                Box(Modifier.weight(0.36f).fillMaxHeight()) {
+                    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
+                        items(state.details?.related.orEmpty(), key = { "rel:" + it.url }) { FeedItemView(it, compact = true) }
+                    }
+                    PanelSlide(visible = panel != null, fromSide = true) {
+                        panelContent(Modifier.fillMaxSize().navigationBarsPadding().imePadding())
+                    }
                 }
             }
         }
@@ -191,35 +295,31 @@ fun WatchScreen(fullscreen: Boolean, wide: Boolean, callbacks: WatchCallbacks) {
         Column(Modifier.fillMaxSize().background(Yt.colors.background)) {
             Spacer(Modifier.fillMaxWidth().background(Color.Black).statusBarsPadding())
             playerBox(Modifier.fillMaxWidth().aspectRatio(16f / 9f).then(swipeDown))
-            WatchDetails(state, callbacks)
+            // Like YouTube in portrait, panels slide up under the video and never cover it.
+            Box(Modifier.fillMaxWidth().weight(1f)) {
+                WatchDetails(state, callbacks, onOpenPanel = { panel = it })
+                PanelSlide(visible = panel != null, fromSide = false) {
+                    panelContent(Modifier.fillMaxSize().navigationBarsPadding().imePadding())
+                }
+            }
         }
     }
 
-    val chapterDetails = state.details
-    if (showChapters && chapterDetails != null && chapterDetails.chapters.isNotEmpty()) {
-        ChaptersSheet(
-            chapters = chapterDetails.chapters,
-            fallbackThumbnail = chapterDetails.thumbnail,
-            positionMs = controller.player.currentPosition,
-            onPick = {
-                controller.player.seekTo(it.startMs)
-                controller.player.play()
-                showChapters = false
-            },
-            onDismiss = { showChapters = false },
-        )
-    }
     if (showSettings) {
         PlayerSettingsSheet(state, controller) { showSettings = false }
     }
 }
 
 @Composable
-private fun WatchDetails(state: WatchState, callbacks: WatchCallbacks, showRelated: Boolean = true) {
+private fun WatchDetails(
+    state: WatchState,
+    callbacks: WatchCallbacks,
+    showRelated: Boolean = true,
+    onOpenPanel: (WatchPanel) -> Unit,
+) {
     val details = state.details
     val controller = LocalContext.current.appContainer.player
     var showDescription by remember { mutableStateOf(false) }
-    var showComments by remember { mutableStateOf(false) }
     var showChat by remember { mutableStateOf(false) }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
@@ -244,7 +344,7 @@ private fun WatchDetails(state: WatchState, callbacks: WatchCallbacks, showRelat
                 item(key = "channel") { ChannelBlock(details) }
                 item(key = "actions") { ActionsRow(details, callbacks) }
                 if (details.chapters.isNotEmpty() && !details.isLive) {
-                    item(key = "chapters") { ChaptersRow(details) { controller.player.seekTo(it.startMs); controller.player.play() } }
+                    item(key = "chapters") { ChaptersRow(details, onShowAll = { onOpenPanel(WatchPanel.Chapters) }) { controller.player.seekTo(it.startMs); controller.player.play() } }
                 }
                 if (state.queue.isNotEmpty()) {
                     item(key = "queue") { QueueCard(state) }
@@ -252,7 +352,7 @@ private fun WatchDetails(state: WatchState, callbacks: WatchCallbacks, showRelat
                 if (details.isLive) {
                     item(key = "chat") { LiveChatTeaser { showChat = true } }
                 } else {
-                    item(key = "comments") { CommentsTeaser(details.url) { showComments = true } }
+                    item(key = "comments") { CommentsTeaser(details.url) { onOpenPanel(WatchPanel.Comments) } }
                 }
                 if (showRelated) items(details.related, key = { "rel:" + it.url }) { FeedItemView(it) }
             }
@@ -283,9 +383,6 @@ private fun WatchDetails(state: WatchState, callbacks: WatchCallbacks, showRelat
     }
     if (showChat && details != null) {
         LiveChatSheet(details.id) { showChat = false }
-    }
-    if (showComments && details != null) {
-        CommentsSheet(details.url, details.id) { showComments = false }
     }
 }
 
@@ -645,11 +742,14 @@ fun MiniPlayer(onExpand: () -> Unit, modifier: Modifier = Modifier) {
 
 /** The uploader's chapters as a row of cards; tapping one jumps there, "View all" opens the list. */
 @Composable
-private fun ChaptersRow(details: VideoDetails, onChapter: (com.imad.itube.data.model.Chapter) -> Unit) {
-    var showAll by remember { mutableStateOf(false) }
+private fun ChaptersRow(
+    details: VideoDetails,
+    onShowAll: () -> Unit,
+    onChapter: (com.imad.itube.data.model.Chapter) -> Unit,
+) {
     Column(Modifier.padding(top = 12.dp)) {
         Row(
-            Modifier.fillMaxWidth().clickable { showAll = true }.padding(horizontal = 12.dp, vertical = 4.dp),
+            Modifier.fillMaxWidth().clickable(onClick = onShowAll).padding(horizontal = 12.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Chapters", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -670,12 +770,7 @@ private fun ChaptersRow(details: VideoDetails, onChapter: (com.imad.itube.data.m
                         .clickable { onChapter(chapter) },
                 ) {
                     Box(Modifier.fillMaxWidth().height(84.dp).clip(RoundedCornerShape(10.dp)).background(Yt.colors.surface)) {
-                        AsyncImage(
-                            model = chapter.thumbnail ?: details.thumbnail,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
+                        HiResImage(chapter.thumbnail ?: details.thumbnail, Modifier.fillMaxSize())
                         Text(
                             Format.position(chapter.startMs),
                             color = Color.White,
@@ -700,16 +795,6 @@ private fun ChaptersRow(details: VideoDetails, onChapter: (com.imad.itube.data.m
                 }
             }
         }
-    }
-    if (showAll) {
-        val controller = LocalContext.current.appContainer.player
-        ChaptersSheet(
-            chapters = details.chapters,
-            fallbackThumbnail = details.thumbnail,
-            positionMs = controller.player.currentPosition,
-            onPick = { onChapter(it); showAll = false },
-            onDismiss = { showAll = false },
-        )
     }
 }
 
