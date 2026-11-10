@@ -93,6 +93,10 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
             }
 
+            SwitchRow("Ambient mode", "A soft glow of the video's colours around the player in dark theme", s.ambientMode) { v ->
+                store.update { it.copy(ambientMode = v) }
+            }
+
             Section("Playback")
             SwitchRow("Background play", "Keep playing audio when you leave the app or lock the screen", s.backgroundPlay) { v ->
                 store.update { it.copy(backgroundPlay = v) }

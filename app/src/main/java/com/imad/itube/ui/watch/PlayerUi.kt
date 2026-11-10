@@ -133,9 +133,16 @@ fun rememberPlayerUiState(player: Player): PlayerUiState {
 /** The video surface. Only one is composed at a time (full player, mini player or PiP). */
 @OptIn(UnstableApi::class)
 @Composable
-fun PlayerSurface(player: Player, modifier: Modifier = Modifier, keepScreenOn: Boolean = false, zoomed: Boolean = false) {
+fun PlayerSurface(
+    player: Player,
+    modifier: Modifier = Modifier,
+    keepScreenOn: Boolean = false,
+    zoomed: Boolean = false,
+    ambient: AmbientFrames? = null,
+) {
     AndroidView(
-        modifier = modifier.background(Color.Black),
+        // With ambient mode on, the letterbox bars stay see-through so the glow shows in them.
+        modifier = if (ambient != null) modifier else modifier.background(Color.Black),
         factory = { ctx ->
             PlayerView(ctx).apply {
                 layoutParams = ViewGroup.LayoutParams(
@@ -153,10 +160,14 @@ fun PlayerSurface(player: Player, modifier: Modifier = Modifier, keepScreenOn: B
         },
         update = { view ->
             if (view.player !== player) view.player = player
+            ambient?.surface = view.videoSurfaceView as? android.view.SurfaceView
             view.keepScreenOn = keepScreenOn
             view.resizeMode = if (zoomed) AspectRatioFrameLayout.RESIZE_MODE_ZOOM else AspectRatioFrameLayout.RESIZE_MODE_FIT
         },
-        onRelease = { it.player = null },
+        onRelease = {
+            if (ambient?.surface === it.videoSurfaceView) ambient?.surface = null
+            it.player = null
+        },
     )
 }
 
