@@ -15,6 +15,7 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import com.imad.itube.data.SkipSegment
 import com.imad.itube.data.SponsorBlock
@@ -99,6 +100,12 @@ class PlayerController(
         .setWakeMode(C.WAKE_MODE_NETWORK)
         .setSeekBackIncrementMs(10_000)
         .setSeekForwardIncrementMs(10_000)
+        // Start playing after 1 s of video is buffered instead of ExoPlayer's 2.5 s, like YouTube.
+        .setLoadControl(
+            DefaultLoadControl.Builder()
+                .setBufferDurationsMs(30_000, 50_000, 1_000, 2_000)
+                .build(),
+        )
         .build()
 
     private val sourceBuilder = MediaSourceBuilder()

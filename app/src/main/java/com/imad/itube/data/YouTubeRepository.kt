@@ -16,8 +16,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import org.schabi.newpipe.extractor.InfoItem
 import org.schabi.newpipe.extractor.ListExtractor.InfoItemsPage
@@ -67,6 +69,7 @@ class YouTubeRepository {
     // ---- Kiosks / home ----------------------------------------------------------------
 
     suspend fun kiosk(kiosk: Kiosk): ItemPage<FeedItem> = io {
+        if (kiosk == Kiosk.Trending) return@io trending()
         val url = yt.kioskList.getListLinkHandlerFactoryByType(kiosk.id).fromId(kiosk.id).url
         // KioskInfo.getInfo also reads the kiosk's page title, and YouTube's podcasts page no
         // longer has one ("Could not get channel name"), which failed the whole list. Only the
@@ -86,6 +89,20 @@ class YouTubeRepository {
         first.getOrThrow()
     }
 
+    /**
+     * YouTube retired its Trending page (with its "Now" and "Videos" tabs) in 2025 and replaced
+     * it with per-category charts, so the old trending extractor only fails with "Could not get
+     * "Now" or "Videos" trending tab". Trending is now built from those charts: trending music,
+     * gaming, movies & TV and podcasts, interleaved.
+     */
+    private suspend fun trending(): ItemPage<FeedItem> = coroutineScope {
+        val parts = TRENDING_PARTS.map { k -> async { runCatching { kiosk(k) }.getOrNull() } }.awaitAll()
+        val lists = parts.map { it?.items.orEmpty().filter { item -> item !is VideoItem || !item.isShort } }
+        if (lists.all { it.isEmpty() }) throw IllegalStateException("Couldn't load Trending")
+        val cursors = parts.mapNotNull { it?.next as? KioskCursor }
+        ItemPage(interleave(lists).distinctBy { it.url }, cursors.takeIf { it.isNotEmpty() }?.let(::MixCursor))
+    }
+
     /** Fallback when YouTube's podcasts page has no episodes we can read: full podcast episodes from search. */
     private suspend fun podcastSearch(): ItemPage<FeedItem> {
         return search("podcast full episode", SearchFilter.Videos).onlyEpisodes()
@@ -96,6 +113,14 @@ class YouTubeRepository {
 
     suspend fun kioskMore(cursor: Any): ItemPage<FeedItem> = io {
         if (cursor is SearchCursor) return@io searchMore(cursor).onlyEpisodes()
+        if (cursor is MixCursor) return@io coroutineScope {
+            val parts = cursor.parts.map { c -> async { runCatching { kioskMore(c) }.getOrNull() } }.awaitAll()
+            val next = parts.mapNotNull { it?.next as? KioskCursor }
+            ItemPage(
+                interleave(parts.map { it?.items.orEmpty() }).distinctBy { it.url },
+                next.takeIf { it.isNotEmpty() }?.let(::MixCursor),
+            )
+        }
         val c = cursor as KioskCursor
         val page = KioskInfo.getMoreItems(yt, c.url, c.page)
         ItemPage(page.items.map { it.toVideoItem() }, page.nextPageOrNull()?.let { KioskCursor(c.url, it) })
@@ -245,24 +270,33 @@ class YouTubeRepository {
         ItemPage(page.items.toFeedItems(), page.nextPageOrNull()?.let { TabCursor(c.handler, it) })
     }
 
-    /** Latest uploads of the given channels, newest first (uses YouTube's RSS feeds). */
-    suspend fun subscriptionFeed(channels: List<ChannelItem>): List<VideoItem> = coroutineScope {
-        val gate = Semaphore(6)
+    /** Latest uploads of the given channels, newest first. Calls [onChannel] as each channel arrives. */
+    suspend fun subscriptionFeed(
+        channels: List<ChannelItem>,
+        onChannel: (suspend (ChannelItem, List<VideoItem>) -> Unit)? = null,
+    ): List<VideoItem> = coroutineScope {
+        val gate = Semaphore(12)
         channels.map { ch ->
-            async(Dispatchers.IO) {
+            async {
                 gate.withPermit {
-                    runCatching {
-                        FeedInfo.getInfo(yt, ch.url).relatedItems.map {
-                            it.toVideoItem().copy(
-                                channelName = it.uploaderName ?: ch.name,
-                                channelUrl = it.uploaderUrl ?: ch.url,
-                                channelAvatar = ch.avatar,
-                            )
-                        }
-                    }.getOrDefault(emptyList())
+                    // One slow channel must not hold up the whole feed.
+                    val videos = withTimeoutOrNull(10_000) { runCatching { channelFeed(ch) }.getOrNull() }.orEmpty()
+                    onChannel?.invoke(ch, videos)
+                    videos
                 }
             }
         }.awaitAll().flatten().sortedByDescending { it.uploadedAt ?: 0L }
+    }
+
+    /** Latest uploads of one channel (YouTube's RSS feed for it: one small request). */
+    suspend fun channelFeed(ch: ChannelItem): List<VideoItem> = runInterruptible(Dispatchers.IO) {
+        FeedInfo.getInfo(yt, ch.url).relatedItems.map {
+            it.toVideoItem().copy(
+                channelName = it.uploaderName ?: ch.name,
+                channelUrl = it.uploaderUrl ?: ch.url,
+                channelAvatar = ch.avatar,
+            )
+        }
     }
 
     // ---- Playlists ---------------------------------------------------------------------
@@ -291,6 +325,7 @@ class YouTubeRepository {
     // ---- helpers -----------------------------------------------------------------------
 
     private class KioskCursor(val url: String, val page: Page)
+    private class MixCursor(val parts: List<KioskCursor>)
     private class SearchCursor(val handler: SearchQueryHandler, val page: Page)
     private class TabCursor(val handler: ListLinkHandler, val page: Page)
     private class PlaylistCursor(val url: String, val page: Page)
@@ -322,6 +357,10 @@ class YouTubeRepository {
         isCreator = runCatching { isChannelOwner }.getOrDefault(false),
         verified = runCatching { isUploaderVerified }.getOrDefault(false),
     )
+
+    private companion object {
+        val TRENDING_PARTS = listOf(Kiosk.Music, Kiosk.Gaming, Kiosk.Movies, Kiosk.Podcasts)
+    }
 
     private suspend fun <T> io(block: suspend () -> T): T = withContext(Dispatchers.IO) { block() }
 

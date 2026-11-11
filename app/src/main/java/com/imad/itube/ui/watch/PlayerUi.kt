@@ -130,7 +130,13 @@ fun rememberPlayerUiState(player: Player): PlayerUiState {
     return state
 }
 
-/** The video surface. Only one is composed at a time (full player, mini player or PiP). */
+/**
+ * The video surface. Only one is composed at a time (full player, mini player or PiP).
+ *
+ * [cover] (the thumbnail) is drawn over it until the video's first frame is on screen, so a
+ * new video never starts on a black box. When the quality changes the last frame stays up
+ * while the new stream loads, instead of going black.
+ */
 @OptIn(UnstableApi::class)
 @Composable
 fun PlayerSurface(
@@ -139,36 +145,60 @@ fun PlayerSurface(
     keepScreenOn: Boolean = false,
     zoomed: Boolean = false,
     ambient: AmbientFrames? = null,
+    cover: String? = null,
 ) {
-    AndroidView(
-        // With ambient mode on, the letterbox bars stay see-through so the glow shows in them.
-        modifier = if (ambient != null) modifier else modifier.background(Color.Black),
-        factory = { ctx ->
-            PlayerView(ctx).apply {
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                )
-                useController = false
-                setShutterBackgroundColor(android.graphics.Color.BLACK)
-                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
-                // Captions are drawn by CaptionOverlay instead, YouTube-style.
-                subtitleView?.visibility = android.view.View.GONE
-                this.player = player
+    var currentId by remember(player) { mutableStateOf(player.currentMediaItem?.mediaId) }
+    var renderedId by remember(player) {
+        // Coming back to a video that's already showing (e.g. mini player -> full player).
+        mutableStateOf(if (player.playbackState == Player.STATE_READY || player.isPlaying) player.currentMediaItem?.mediaId else null)
+    }
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onEvents(player: Player, events: Player.Events) {
+                currentId = player.currentMediaItem?.mediaId
             }
-        },
-        update = { view ->
-            if (view.player !== player) view.player = player
-            ambient?.surface = view.videoSurfaceView as? android.view.SurfaceView
-            view.keepScreenOn = keepScreenOn
-            view.resizeMode = if (zoomed) AspectRatioFrameLayout.RESIZE_MODE_ZOOM else AspectRatioFrameLayout.RESIZE_MODE_FIT
-        },
-        onRelease = {
-            if (ambient?.surface === it.videoSurfaceView) ambient?.surface = null
-            it.player = null
-        },
-    )
+            override fun onRenderedFirstFrame() {
+                renderedId = player.currentMediaItem?.mediaId
+            }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener) }
+    }
+    Box(modifier) {
+        AndroidView(
+            // With ambient mode on, the letterbox bars stay see-through so the glow shows in them.
+            modifier = if (ambient != null) Modifier.fillMaxSize() else Modifier.fillMaxSize().background(Color.Black),
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                    )
+                    useController = false
+                    setShutterBackgroundColor(android.graphics.Color.BLACK)
+                    setKeepContentOnPlayerReset(true)
+                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+                    // Captions are drawn by CaptionOverlay instead, YouTube-style.
+                    subtitleView?.visibility = android.view.View.GONE
+                    this.player = player
+                }
+            },
+            update = { view ->
+                if (view.player !== player) view.player = player
+                ambient?.surface = view.videoSurfaceView as? android.view.SurfaceView
+                view.keepScreenOn = keepScreenOn
+                view.resizeMode = if (zoomed) AspectRatioFrameLayout.RESIZE_MODE_ZOOM else AspectRatioFrameLayout.RESIZE_MODE_FIT
+            },
+            onRelease = {
+                if (ambient?.surface === it.videoSurfaceView) ambient?.surface = null
+                it.player = null
+            },
+        )
+        if (cover != null && (currentId == null || currentId != renderedId)) {
+            com.imad.itube.ui.components.HiResImage(cover, Modifier.fillMaxSize().background(Color.Black))
+        }
+    }
 }
 
 /**

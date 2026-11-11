@@ -12,6 +12,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
@@ -54,6 +55,12 @@ class AppContainer(val app: Application) {
     /** A fresh Shorts feed (each visit to the Shorts tab starts a new one). */
     fun shortsFeed() = com.imad.itube.data.ShortsFeed(repository, account)
 
+    /** The Shorts tab's feed, kept for the whole session and loaded ahead of time. */
+    val shorts = com.imad.itube.data.ShortsSession(::shortsFeed, repository, appScope)
+
+    /** Latest uploads from subscriptions, cached on disk so the tab opens instantly. */
+    val subscriptionFeed = com.imad.itube.data.SubscriptionFeed(app, repository, appScope)
+
     /** Fetches the profile and copies the account's subscriptions into the library. */
     fun onSignedIn() {
         appScope.launch {
@@ -92,6 +99,14 @@ class AppContainer(val app: Application) {
             settings.settings.map { it.uploadAlerts }.distinctUntilChanged().collect { on ->
                 runCatching { uploadAlerts.schedule(on) }
             }
+        }
+        appScope.launch {
+            // Once the home feed has had its turn on the network, get Subscriptions and the first Shorts ready.
+            kotlinx.coroutines.delay(3_000)
+            library.loaded.first { it }
+            library.data.value.subscriptions.takeIf { it.isNotEmpty() }?.let { subscriptionFeed.load(it) }
+            kotlinx.coroutines.delay(2_000)
+            shorts.warm()
         }
         appScope.launch {
             settings.settings.collect { s ->
