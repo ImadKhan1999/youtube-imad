@@ -57,6 +57,8 @@ jobs:
           ITUBE_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           ITUBE_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           ITUBE_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          # Optional. The contents of google-services.json, for anonymous usage stats.
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
           ./gradlew --stacktrace assembleRelease \
             -PitubeVersionName=${{ steps.version.outputs.name }} \
