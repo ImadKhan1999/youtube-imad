@@ -155,6 +155,7 @@ fun WatchScreen(fullscreen: Boolean, wide: Boolean, callbacks: WatchCallbacks) {
                 keepScreenOn = ui.isPlaying,
                 zoomed = fullscreen && PlayerZoom.zoomed,
                 ambient = if (ambientOn) ambient else null,
+                cover = state.details?.thumbnail ?: state.item?.thumbnail,
             )
             val title = state.details?.title ?: state.item?.title.orEmpty()
             if (state.error != null && state.details != null) {
@@ -197,10 +198,6 @@ fun WatchScreen(fullscreen: Boolean, wide: Boolean, callbacks: WatchCallbacks) {
                     chapters = state.details?.chapters.orEmpty(),
                     onChapters = { panel = WatchPanel.Chapters },
                 )
-            }
-            if (state.loading && state.details == null) {
-                // Show the thumbnail while the streams load, like YouTube does.
-                HiResImage(state.item?.thumbnail, Modifier.fillMaxSize())
             }
         }
     }
@@ -731,7 +728,12 @@ fun MiniPlayer(onExpand: () -> Unit, modifier: Modifier = Modifier) {
             Box(Modifier.fillMaxWidth(fraction).height(2.dp).background(YtRed))
         }
         Row(Modifier.height(62.dp), verticalAlignment = Alignment.CenterVertically) {
-            PlayerSurface(controller.player, Modifier.width(110.dp).aspectRatio(16f / 9f), keepScreenOn = ui.isPlaying)
+            PlayerSurface(
+                controller.player,
+                Modifier.width(110.dp).aspectRatio(16f / 9f),
+                keepScreenOn = ui.isPlaying,
+                cover = state.details?.thumbnail ?: item.thumbnail,
+            )
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(

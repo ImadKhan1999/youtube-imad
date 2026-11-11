@@ -8,6 +8,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -40,7 +42,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -50,6 +51,11 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.viewinterop.AndroidView
+import android.view.TextureView
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -75,7 +81,6 @@ import com.imad.itube.ui.watch.CaptionOverlay
 import com.imad.itube.ui.watch.CommentsSheet
 import com.imad.itube.ui.watch.DoubleSpeedPill
 import com.imad.itube.ui.watch.holdForDoubleSpeed
-import com.imad.itube.ui.watch.PlayerSurface
 import com.imad.itube.util.Format
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -88,13 +93,12 @@ fun ShortsScreen(seed: String? = null) {
     val container = context.appContainer
     val actions = LocalAppActions.current
     val scope = rememberCoroutineScope()
-    val feed = remember { container.shortsFeed() }
-    val shorts = remember { mutableStateListOf<VideoItem>() }
-    var loading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var loadingMore by remember { mutableStateOf(false) }
-    val shortsPlayer = remember { ShortsPlayer(context.applicationContext, container.repository, scope) }
-    var playError by remember { mutableStateOf<String?>(null) }
+    val session = container.shorts
+    val feedState by session.state.collectAsState()
+    val shorts = remember(feedState.items, seed) {
+        if (seed == null) feedState.items else listOf(VideoItem(url = seed, title = "")) + feedState.items.filter { it.url != seed }
+    }
+    val shortsPlayer = remember { ShortsPlayer(context.applicationContext, session, scope) }
     var commentsFor by remember { mutableStateOf<VideoItem?>(null) }
 
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -104,8 +108,8 @@ fun ShortsScreen(seed: String? = null) {
         container.player.player.pause()
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_STOP -> shortsPlayer.player.pause()
-                Lifecycle.Event.ON_START -> if (shortsPlayer.player.mediaItemCount > 0) shortsPlayer.player.play()
+                Lifecycle.Event.ON_STOP -> shortsPlayer.pause()
+                Lifecycle.Event.ON_START -> shortsPlayer.resume()
                 else -> {}
             }
         }
@@ -116,28 +120,15 @@ fun ShortsScreen(seed: String? = null) {
         }
     }
 
-    suspend fun loadMore() {
-        if (loadingMore) return
-        loadingMore = true
-        runCatching { feed.next() }
-            .onSuccess { page -> shorts += page.filter { s -> shorts.none { it.url == s.url } } }
-            .onFailure { if (shorts.isEmpty()) error = it.message ?: "Couldn't load Shorts" }
-        loadingMore = false
-        loading = false
-    }
-
-    LaunchedEffect(Unit) {
-        seed?.let { shorts += VideoItem(url = it, title = "") }
-        loadMore()
-    }
+    LaunchedEffect(Unit) { if (session.state.value.items.isEmpty()) session.loadMore() }
 
     if (shorts.isEmpty()) {
         Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
-            if (loading) {
+            if (feedState.error == null) {
                 CircularProgressIndicator(color = Color.White, strokeWidth = 3.dp, modifier = Modifier.size(36.dp))
             } else {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(error ?: "No Shorts right now", color = Color.White, modifier = Modifier.padding(24.dp))
+                    Text(feedState.error ?: "No Shorts right now", color = Color.White, modifier = Modifier.padding(24.dp))
                     Text(
                         "Try again",
                         color = Color.White,
@@ -145,7 +136,7 @@ fun ShortsScreen(seed: String? = null) {
                         modifier = Modifier
                             .clip(RoundedCornerShape(50))
                             .background(Color.White.copy(alpha = 0.15f))
-                            .clickable { loading = true; error = null; scope.launch { loadMore() } }
+                            .clickable { scope.launch { session.restart() } }
                             .padding(horizontal = 20.dp, vertical = 10.dp),
                     )
                 }
@@ -154,14 +145,19 @@ fun ShortsScreen(seed: String? = null) {
         return
     }
 
-    val pager = rememberPagerState { shorts.size }
-    LaunchedEffect(pager) {
+    val pager = rememberPagerState(initialPage = if (seed == null) session.lastPage.coerceIn(0, shorts.size - 1) else 0) { shorts.size }
+    val urls by rememberUpdatedState(shorts.map { it.url })
+    LaunchedEffect(pager, shorts.size) {
         snapshotFlow { pager.settledPage }.distinctUntilChanged().collect { page ->
-            val item = shorts.getOrNull(page) ?: return@collect
-            playError = null
-            shortsPlayer.play(item.url) { playError = it }
-            shortsPlayer.prefetch(shorts.drop(page + 1).take(2).map { it.url })
-            if (page >= shorts.size - 4) loadMore()
+            if (seed == null) session.lastPage = page
+            shortsPlayer.activate(page, urls)
+            if (page >= shorts.size - 4) launch { session.loadMore() }
+        }
+    }
+    // While a swipe is under way, start loading the page it's heading to.
+    LaunchedEffect(pager) {
+        snapshotFlow { pager.targetPage }.distinctUntilChanged().collect { page ->
+            urls.getOrNull(page)?.let { shortsPlayer.slot(page).load(it) }
         }
     }
 
@@ -175,9 +171,9 @@ fun ShortsScreen(seed: String? = null) {
             val item = shorts[page]
             ShortPage(
                 item = item,
-                player = shortsPlayer,
+                slot = shortsPlayer.slot(page),
+                session = session,
                 active = page == pager.settledPage,
-                error = if (page == pager.settledPage) playError else null,
                 onComments = { commentsFor = it },
                 onShare = { actions.share(it.title, it.url) },
                 onChannel = { url -> actions.openChannel(url) },
@@ -198,51 +194,88 @@ fun ShortsScreen(seed: String? = null) {
     }
 }
 
+/**
+ * The short's video on a TextureView, which slides with the pager without the lag or black
+ * edges a SurfaceView can show mid-swipe. Vertical videos fill the screen, others are letterboxed.
+ */
+@Composable
+private fun ShortVideo(player: ExoPlayer, size: VideoSize, modifier: Modifier = Modifier) {
+    BoxWithConstraints(modifier.clipToBounds(), contentAlignment = Alignment.Center) {
+        val ratio = if (size.width > 0 && size.height > 0) size.width * size.pixelWidthHeightRatio / size.height else 9f / 16f
+        val boxRatio = if (maxHeight.value > 0f) maxWidth.value / maxHeight.value else ratio
+        val crop = ratio < 1f
+        val widerThanBox = ratio > boxRatio
+        val (w, h) = if (crop == widerThanBox) {
+            // Fill the height, crop or letterbox the sides.
+            maxHeight * ratio to maxHeight
+        } else {
+            maxWidth to maxWidth / ratio
+        }
+        AndroidView(
+            factory = { ctx -> TextureView(ctx) },
+            update = { view ->
+                val bound = view.tag as? ExoPlayer
+                if (bound !== player) {
+                    bound?.clearVideoTextureView(view)
+                    player.setVideoTextureView(view)
+                    view.tag = player
+                }
+            },
+            onRelease = { view ->
+                (view.tag as? ExoPlayer)?.clearVideoTextureView(view)
+                view.tag = null
+            },
+            modifier = Modifier.requiredSize(w, h),
+        )
+    }
+}
+
 private fun videoId(url: String): String =
     Regex("(?:v=|/shorts/|youtu\\.be/)([\\w-]{11})").find(url)?.groupValues?.get(1) ?: url.takeLast(11)
 
 @Composable
 private fun ShortPage(
     item: VideoItem,
-    player: ShortsPlayer,
+    slot: ShortsPlayer.Slot,
+    session: com.imad.itube.data.ShortsSession,
     active: Boolean,
-    error: String?,
     onComments: (VideoItem) -> Unit,
     onShare: (VideoItem) -> Unit,
     onChannel: (String) -> Unit,
 ) {
     val container = LocalContext.current.appContainer
+    val player = slot.player
     val details by produceState(initialValue = null as com.imad.itube.data.model.VideoDetails?, item.url) {
-        value = runCatching { container.repository.details(player.info(item.url).await()) }.getOrNull()
+        value = runCatching { container.repository.details(session.info(item.url).await()) }.getOrNull()
     }
     val dislikes by produceState<Long?>(null, item.url) { value = container.dislikes.dislikes(videoId(item.url)) }
     val library by container.library.data.collectAsState()
     val liked = library.liked.any { it.url == item.url }
     var paused by remember(item.url) { mutableStateOf(false) }
     var speedBoost by remember(item.url) { mutableStateOf(false) }
-    var videoSize by remember { mutableStateOf(VideoSize.UNKNOWN) }
     var progress by remember { mutableFloatStateOf(0f) }
     val title = details?.title ?: item.title
     val channelName = details?.channelName ?: item.channelName
     val channelUrl = details?.channelUrl ?: item.channelUrl
     val subscribed = container.library.isSubscribed(channelUrl)
+    val mine = slot.url == item.url
+    val error = if (active && mine) slot.error else null
 
     if (active) {
         DisposableEffect(player) {
             val listener = object : Player.Listener {
-                override fun onVideoSizeChanged(size: VideoSize) { videoSize = size }
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     if (isPlaying) paused = false
                 }
             }
-            player.player.addListener(listener)
-            onDispose { player.player.removeListener(listener) }
+            player.addListener(listener)
+            onDispose { player.removeListener(listener) }
         }
         LaunchedEffect(item.url) {
             while (true) {
-                val d = player.player.duration
-                progress = if (d > 0) (player.player.currentPosition.toFloat() / d).coerceIn(0f, 1f) else 0f
-                delay(200)
+                val d = player.duration
+                progress = if (d > 0) (player.currentPosition.toFloat() / d).coerceIn(0f, 1f) else 0f
+                delay(100)
             }
         }
     }
@@ -253,11 +286,11 @@ private fun ShortPage(
             .background(Color.Black)
             .pointerInput(active) {
                 detectTapGestures(
-                    onPress = { if (active) holdForDoubleSpeed(player.player, viewConfiguration.longPressTimeoutMillis) { speedBoost = it } },
+                    onPress = { if (active) holdForDoubleSpeed(player, viewConfiguration.longPressTimeoutMillis) { speedBoost = it } },
                     onLongPress = {},
                     onTap = {
                         if (!active) return@detectTapGestures
-                        if (player.player.isPlaying) { player.player.pause(); paused = true } else { player.player.play(); paused = false }
+                        if (player.isPlaying) { player.pause(); paused = true } else { player.play(); paused = false }
                     },
                     onDoubleTap = {
                         if (!liked) container.library.toggleLiked(details?.toVideoItem() ?: item)
@@ -265,8 +298,11 @@ private fun ShortPage(
                 )
             },
     ) {
-        val thumb = details?.thumbnail ?: item.thumbnail
-        if (!active || videoSize == VideoSize.UNKNOWN) {
+        // Each page draws its own player, so the next short is already on screen mid-swipe.
+        if (mine) ShortVideo(player, slot.videoSize, Modifier.fillMaxSize())
+        // The thumbnail stays on top until the video's first frame is drawn: no black flash.
+        if (!(mine && slot.firstFrame)) {
+            val thumb = details?.thumbnail ?: item.thumbnail
             AsyncImage(
                 model = thumb ?: "https://i.ytimg.com/vi/${videoId(item.url)}/hq720.jpg",
                 contentDescription = null,
@@ -275,14 +311,7 @@ private fun ShortPage(
             )
         }
         if (active) {
-            // Vertical videos fill the screen like on YouTube; others are letterboxed.
-            PlayerSurface(
-                player.player,
-                Modifier.fillMaxSize(),
-                keepScreenOn = true,
-                zoomed = videoSize.height > videoSize.width,
-            )
-            CaptionOverlay(player.player, lifted = true)
+            CaptionOverlay(player, lifted = true)
             DoubleSpeedPill(speedBoost, Modifier.align(Alignment.TopCenter).padding(top = 56.dp))
         }
         // Darken the bottom so the text stays readable.
@@ -300,11 +329,20 @@ private fun ShortPage(
             ) { Icon(Icons.Filled.PlayArrow, "Play", tint = Color.White, modifier = Modifier.size(44.dp)) }
         }
         if (error != null) {
-            Text(
-                error,
-                color = Color.White,
-                modifier = Modifier.align(Alignment.Center).background(Color.Black.copy(alpha = 0.6f)).padding(16.dp),
-            )
+            Column(
+                Modifier.align(Alignment.Center).clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(alpha = 0.6f)).padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(error, color = Color.White)
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "Retry",
+                    color = Color.Black,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.clip(RoundedCornerShape(50)).background(Color.White).clickable { slot.retry() }
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                )
+            }
         }
 
         // Right-hand action column.

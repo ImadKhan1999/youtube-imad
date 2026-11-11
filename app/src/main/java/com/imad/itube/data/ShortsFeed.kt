@@ -6,6 +6,8 @@ import com.imad.itube.account.lastImage
 import com.imad.itube.account.str
 import com.imad.itube.data.model.VideoItem
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -39,6 +41,7 @@ class ShortsFeed(private val repository: YouTubeRepository, private val api: You
         }
         sequenceToken = res.str("continuationEndpoint", "continuationCommand", "token")
         return (res.at("entries") as? JsonArray).orEmpty().mapNotNull { e ->
+            if (isAd(e)) return@mapNotNull null
             val endpoint = e.at("command", "reelWatchEndpoint") ?: return@mapNotNull null
             val id = endpoint.str("videoId") ?: return@mapNotNull null
             val details = endpoint.at("unserializedPrefetchData", "playerResponse", "videoDetails")
@@ -51,6 +54,24 @@ class ShortsFeed(private val repository: YouTubeRepository, private val api: You
                 isShort = true,
             ).takeIf { seen.add(id) }
         }
+    }
+
+    /**
+     * Ad Shorts come in the same sequence as real ones, marked by `adClientParams` (isAd) on their
+     * watch endpoint or wrapped in an ad slot renderer. The prefetched player response is left out
+     * of the check, since ordinary videos list their own ad placements there.
+     */
+    private fun isAd(entry: JsonElement): Boolean {
+        val endpoint = entry.at("command", "reelWatchEndpoint")
+        if (endpoint.at("adClientParams") != null) return true
+        val stripped = (entry as? JsonObject)?.let { obj ->
+            val cmd = obj["command"] as? JsonObject
+            val ep = cmd?.get("reelWatchEndpoint") as? JsonObject
+            if (ep == null) obj
+            else JsonObject(obj + ("command" to JsonObject(cmd + ("reelWatchEndpoint" to JsonObject(ep - "unserializedPrefetchData")))))
+        } ?: entry
+        val text = stripped.toString()
+        return AD_MARKERS.any { text.contains(it) }
     }
 
     private suspend fun searchPage(): List<VideoItem> {
@@ -66,6 +87,10 @@ class ShortsFeed(private val repository: YouTubeRepository, private val api: You
             if (shorts.isNotEmpty()) return shorts.shuffled()
         }
         return emptyList()
+    }
+
+    private companion object {
+        val AD_MARKERS = listOf("\"isAd\":true", "adSlotRenderer", "AdRenderer\"", "adSlotMetadata", "\"isPromoted\":true")
     }
 
     private fun videoId(url: String) = Regex("(?:v=|/shorts/)([\\w-]{11})").find(url)?.groupValues?.get(1) ?: url

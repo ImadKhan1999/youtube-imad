@@ -22,42 +22,32 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.imad.itube.AppContainer
 import com.imad.itube.appContainer
-import com.imad.itube.data.model.ItemPage
 import com.imad.itube.ui.components.Avatar
 import com.imad.itube.ui.components.EmptyBox
 import com.imad.itube.ui.components.FeedList
 import com.imad.itube.ui.components.LocalAppActions
-import com.imad.itube.ui.components.Paged
+import com.imad.itube.ui.components.PagedState
 import com.imad.itube.ui.components.ScreenScaffold
 import com.imad.itube.ui.components.YtTopBar
 import com.imad.itube.ui.theme.Yt
-
-class SubscriptionsViewModel(container: AppContainer) : ViewModel() {
-    private val library = container.library
-    val paged = Paged(
-        viewModelScope,
-        first = {
-            val subs = library.data.value.subscriptions
-            ItemPage(container.repository.subscriptionFeed(subs), null)
-        },
-        more = { ItemPage(emptyList(), null) },
-    )
-}
 
 @Composable
 fun SubscriptionsScreen() {
     val container = LocalContext.current.appContainer
     val actions = LocalAppActions.current
-    val vm: SubscriptionsViewModel = viewModel { SubscriptionsViewModel(container) }
+    val feed = container.subscriptionFeed
     val library by container.library.data.collectAsState()
-    val state by vm.paged.state.collectAsState()
+    val feedState by feed.state.collectAsState()
+    val state = PagedState(
+        items = feedState.items,
+        loading = feedState.loading,
+        refreshing = feedState.refreshing,
+        error = feedState.error,
+        loaded = feedState.loaded,
+    )
     val subsKey = library.subscriptions.joinToString { it.url }
-    LaunchedEffect(subsKey) { if (library.subscriptions.isNotEmpty()) vm.paged.load() }
+    LaunchedEffect(subsKey) { if (library.subscriptions.isNotEmpty()) feed.load(library.subscriptions) }
 
     ScreenScaffold(topBar = { YtTopBar() }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
@@ -71,8 +61,8 @@ fun SubscriptionsScreen() {
             FeedList(
                 state = state,
                 onLoadMore = {},
-                onRefresh = { vm.paged.load(refresh = true) },
-                onRetry = { vm.paged.load() },
+                onRefresh = { feed.load(library.subscriptions, force = true) },
+                onRetry = { feed.load(library.subscriptions, force = true) },
                 header = {
                     item(key = "channels") {
                         LazyRow(contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)) {
