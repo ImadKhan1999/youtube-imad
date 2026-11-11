@@ -1,3 +1,5 @@
+import groovy.json.JsonSlurper
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -17,6 +19,11 @@ android {
         versionName = providers.gradleProperty("itubeVersionName").getOrElse("1.2.8")
         versionCode = providers.gradleProperty("itubeVersionCode").map(String::toInt).getOrElse(10208)
         vectorDrawables.useSupportLibrary = true
+
+        // Anonymous usage stats (Firebase Analytics). The Firebase config comes from the
+        // GOOGLE_SERVICES_JSON secret, and only release.yml passes it. Without it, Firebase
+        // never starts and nothing is sent, so debug, pull-request and fork builds stay silent.
+        firebaseConfig()?.forEach { (name, value) -> resValue("string", name, value) }
     }
 
     // The release key lives only in GitHub secrets. Without it, release builds fall back to
@@ -94,6 +101,8 @@ dependencies {
     implementation(libs.androidx.webkit)
     implementation(libs.play.services.cast.framework)
     implementation(libs.androidx.mediarouter)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.analytics)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
@@ -118,4 +127,32 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
 
     implementation(libs.newpipe.extractor)
+}
+
+/**
+ * Reads google-services.json from the GOOGLE_SERVICES_JSON environment variable and returns the
+ * string resources Firebase looks for, the same ones the google-services Gradle plugin would make.
+ * Returns null when the variable is unset, so Firebase stays off.
+ */
+fun firebaseConfig(): Map<String, String>? {
+    val json = System.getenv("GOOGLE_SERVICES_JSON")?.takeIf { it.isNotBlank() } ?: return null
+    @Suppress("UNCHECKED_CAST")
+    val root = JsonSlurper().parseText(json) as Map<String, Any?>
+    val project = root["project_info"] as Map<String, Any?>
+    val clients = root["client"] as List<Map<String, Any?>>
+    val client = clients.first {
+        val info = it["client_info"] as Map<String, Any?>
+        val android = info["android_client_info"] as Map<String, Any?>
+        android["package_name"] == "com.imad.itube"
+    }
+    val appId = (client["client_info"] as Map<String, Any?>)["mobilesdk_app_id"] as String
+    val apiKey = ((client["api_key"] as List<Map<String, Any?>>).first())["current_key"] as String
+    return buildMap {
+        put("google_app_id", appId)
+        put("google_api_key", apiKey)
+        put("google_crash_reporting_api_key", apiKey)
+        put("gcm_defaultSenderId", project["project_number"].toString())
+        put("project_id", project["project_id"].toString())
+        (project["storage_bucket"] as String?)?.let { put("google_storage_bucket", it) }
+    }
 }
