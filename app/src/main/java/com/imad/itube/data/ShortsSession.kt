@@ -47,7 +47,9 @@ class ShortsSession(private val newFeed: () -> ShortsFeed, private val repositor
         d
     }
 
-    fun forget(url: String) = synchronized(infos) { infos.remove(url) }
+    fun forget(url: String) {
+        synchronized(infos) { infos.remove(url) }
+    }
 
     fun prefetch(urls: List<String>) = urls.forEach { info(it) }
 
