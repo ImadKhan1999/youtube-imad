@@ -35,11 +35,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import org.schabi.newpipe.extractor.exceptions.AgeRestrictedContentException
-import org.schabi.newpipe.extractor.exceptions.ContentNotAvailableException
-import org.schabi.newpipe.extractor.exceptions.GeographicRestrictionException
-import org.schabi.newpipe.extractor.exceptions.PaidContentException
-import org.schabi.newpipe.extractor.exceptions.ReCaptchaException
 import org.schabi.newpipe.extractor.stream.StreamInfo
 
 /** What the watch page and mini player render. */
@@ -486,15 +481,7 @@ class PlayerController(
         }
     }
 
-    private fun friendlyError(e: Exception): String = when (e) {
-        is AgeRestrictedContentException -> "This video is age-restricted. Sign-in support is coming."
-        is GeographicRestrictionException -> "This video isn't available in your country."
-        is PaidContentException -> "This video is for members or requires payment."
-        is ReCaptchaException -> "YouTube is asking to verify you're not a bot. Try again later."
-        is ContentNotAvailableException -> e.message ?: "This video isn't available."
-        is java.io.IOException -> "No connection. Check your network and try again."
-        else -> e.message ?: "Something went wrong"
-    }
+    private fun friendlyError(e: Exception): String = com.imad.itube.data.playbackErrorMessage(e)
 
     private companion object {
         const val TAG = "PlayerController"

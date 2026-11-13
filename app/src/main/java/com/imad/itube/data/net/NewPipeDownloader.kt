@@ -18,12 +18,18 @@ class NewPipeDownloader(private val client: OkHttpClient) : Downloader() {
     @Volatile
     var youtubeCookies: String = ""
 
+    /** The signed-in account's cookies, used only by the backup player clients. */
+    @Volatile
+    var accountCookies: () -> String? = { null }
+
+    private val playerFallback = PlayerFallback(client) { accountCookies() }
+
     override fun execute(request: Request): Response {
         val body = request.dataToSend()?.toRequestBody()
         val builder = okhttp3.Request.Builder()
             .method(request.httpMethod(), body)
             .url(request.url())
-            .header("User-Agent", USER_AGENT)
+            .header("User-Agent", if (request.url().contains("googlevideo.com")) PlayerFallback.userAgentFor(request.url()) else USER_AGENT)
 
         val url = request.url()
         if (youtubeCookies.isNotBlank() && url.contains("youtube.com")) {
@@ -39,7 +45,12 @@ class NewPipeDownloader(private val client: OkHttpClient) : Downloader() {
             if (response.code == 429) {
                 throw ReCaptchaException("reCaptcha challenge requested", url)
             }
-            val text = response.body?.string()
+            var text = response.body?.string()
+            // YouTube refused the stream request (usually "confirm you're not a bot" on a VPN):
+            // ask again as other clients before giving up.
+            if (playerFallback.isStreamRequest(url, request.dataToSend()) && playerFallback.isBlocked(text)) {
+                playerFallback.retry(request.dataToSend()!!)?.let { text = it }
+            }
             return Response(
                 response.code,
                 response.message,

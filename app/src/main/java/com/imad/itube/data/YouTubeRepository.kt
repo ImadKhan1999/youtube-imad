@@ -78,7 +78,7 @@ class YouTubeRepository {
             val extractor = yt.kioskList.getExtractorByUrl(url, null)
             extractor.fetchPage()
             val page = extractor.initialPage
-            val items: List<FeedItem> = page.items.filterIsInstance<StreamInfoItem>().map { it.toVideoItem() }
+            val items: List<FeedItem> = page.items.filterIsInstance<StreamInfoItem>().filterNot { it.isAd() }.map { it.toVideoItem() }
             val next = if (page.hasNextPage()) page.nextPage.validOrNull() else null
             ItemPage(items, next?.let { KioskCursor(url, it) })
         }
@@ -123,7 +123,7 @@ class YouTubeRepository {
         }
         val c = cursor as KioskCursor
         val page = KioskInfo.getMoreItems(yt, c.url, c.page)
-        ItemPage(page.items.map { it.toVideoItem() }, page.nextPageOrNull()?.let { KioskCursor(c.url, it) })
+        ItemPage(page.items.filterNot { it.isAd() }.map { it.toVideoItem() }, page.nextPageOrNull()?.let { KioskCursor(c.url, it) })
     }
 
     /**
