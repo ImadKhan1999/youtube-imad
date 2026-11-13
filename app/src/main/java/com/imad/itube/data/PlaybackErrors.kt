@@ -12,7 +12,8 @@ fun playbackErrorMessage(e: Throwable): String = when (e) {
     is SignInConfirmNotBotException ->
         "YouTube is blocking video playback on this network and asking to confirm you're not a bot. " +
             "This happens a lot on VPNs. iTube already tried its backup methods. " +
-            "Switch to another VPN server or turn the VPN off, or sign in to iTube, then try again."
+            "Switch to another VPN server or turn the VPN off, then try again." +
+            (com.imad.itube.data.net.PlayerFallback.lastReport?.let { "\n\nDetails: $it" } ?: "")
     is AgeRestrictedContentException -> "This video is age-restricted. Sign in to iTube to watch it."
     is GeographicRestrictionException -> "This video isn't available in your country."
     is PaidContentException -> "This video is for members or requires payment."

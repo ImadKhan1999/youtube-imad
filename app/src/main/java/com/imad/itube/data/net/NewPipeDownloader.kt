@@ -13,7 +13,7 @@ import org.schabi.newpipe.extractor.exceptions.ReCaptchaException
  * Extra cookies (restricted mode now, the signed-in account later) are attached to
  * youtube.com requests only.
  */
-class NewPipeDownloader(private val client: OkHttpClient) : Downloader() {
+class NewPipeDownloader(context: android.content.Context, private val client: OkHttpClient) : Downloader() {
 
     @Volatile
     var youtubeCookies: String = ""
@@ -22,7 +22,7 @@ class NewPipeDownloader(private val client: OkHttpClient) : Downloader() {
     @Volatile
     var accountCookies: () -> String? = { null }
 
-    private val playerFallback = PlayerFallback(client) { accountCookies() }
+    private val playerFallback = PlayerFallback(context, client) { accountCookies() }
 
     override fun execute(request: Request): Response {
         val body = request.dataToSend()?.toRequestBody()

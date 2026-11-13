@@ -33,7 +33,7 @@ class AppContainer(val app: Application) {
         .dns(com.imad.itube.data.net.FallbackDns)
         .build()
 
-    val downloader = NewPipeDownloader(okHttp)
+    val downloader = NewPipeDownloader(app, okHttp)
 
     val settings = SettingsStore(app, appScope)
     val library = LibraryStore(app, appScope)
