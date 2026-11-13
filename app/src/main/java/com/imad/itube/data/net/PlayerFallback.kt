@@ -98,8 +98,14 @@ internal class PlayerFallback(
         }
         val report = ArrayList<String>()
         report += "VISIONOS: refused"
+        lastUsed = null
         if (accountCookies() != null && cookies == null) report += "account: no SAPISID cookie"
         for (client in clients) {
+            val label = client.label + if (client.signedIn) " (account)" else ""
+            if (label in badClients) {
+                report += "$label: skipped, its streams were refused (403)"
+                continue
+            }
             val outcome = runCatching { request(client, original, videoId, cookies) }
             val text = outcome.getOrNull()
             val result = when {
@@ -107,11 +113,11 @@ internal class PlayerFallback(
                 text == null -> "no answer"
                 else -> verdict(text, videoId, client.hlsOnly)
             }
-            val label = client.label + if (client.signedIn) " (account)" else ""
             report += "$label: $result"
             Log.w(TAG, "$label for $videoId: $result")
             if (result == OK && text != null) {
-                lastReport = null
+                lastReport = report.joinToString("; ").take(600)
+                lastUsed = label
                 return text
             }
         }
@@ -275,10 +281,29 @@ internal class PlayerFallback(
         private const val ORIGIN = "https://www.youtube.com"
         private const val OK = "ok"
 
-        /** What the backup clients answered the last time they were all refused (shown with the error). */
+        /** What the backup clients answered the last time the normal client was refused (shown with errors). */
         @Volatile
         var lastReport: String? = null
             private set
+
+        /** The backup client the current video's streams came from, or null for the normal client. */
+        @Volatile
+        var lastUsed: String? = null
+            private set
+
+        /** Backup clients whose stream URLs YouTube refused (HTTP 403) this session; skipped from now on. */
+        private val badClients: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+        /**
+         * The last video's streams came from a backup client and were refused: stop using that
+         * client. Returns its name, or null if the streams didn't come from a backup client.
+         */
+        fun markLastUsedBad(): String? {
+            val used = lastUsed ?: return null
+            badClients += used
+            lastUsed = null
+            return used
+        }
 
         const val ANDROID_VR_UA =
             "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip"

@@ -114,6 +114,7 @@ class PlayerController(
     val currentInfo: StreamInfo? get() = info
     private var loadJob: Job? = null
     private var errorRetries = 0
+    private var fallbackRetries = 0
     private val skipped = HashSet<Long>()
 
     /** Shown by the UI as a snackbar, e.g. "Skipped sponsor". */
@@ -124,13 +125,26 @@ class PlayerController(
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED) onEnded()
-                if (playbackState == Player.STATE_READY) errorRetries = 0
+                if (playbackState == Player.STATE_READY) {
+                    errorRetries = 0
+                    fallbackRetries = 0
+                }
             }
 
             override fun onPlayerError(error: PlaybackException) {
                 Log.w(TAG, "Playback error", error)
                 if (_state.value.offline) {
                     _state.update { it.copy(error = "Couldn't play this file: ${error.errorCodeName}") }
+                    return
+                }
+                // On a VPN the streams may come from a backup client (see PlayerFallback). If
+                // YouTube refuses that client's stream URLs, drop it and try the next one.
+                if (isForbidden(error) && fallbackRetries < 8 && _state.value.item != null &&
+                    com.imad.itube.data.net.PlayerFallback.markLastUsedBad() != null
+                ) {
+                    fallbackRetries++
+                    val position = player.currentPosition
+                    _state.value.item?.let { load(it, position, keepState = true) }
                     return
                 }
                 // Stream URLs expire after a few hours and YouTube sometimes answers 403;
@@ -165,7 +179,17 @@ class PlayerController(
         return buildString {
             append("Playback error: ").append(error.errorCodeName)
             if (!hint.isNullOrBlank()) append("\n").append(hint)
+            com.imad.itube.data.net.PlayerFallback.lastReport?.let { append("\n\nBackup methods: ").append(it) }
         }
+    }
+
+    private fun isForbidden(error: PlaybackException): Boolean {
+        var e: Throwable? = error
+        while (e != null) {
+            if (e is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException && e.responseCode == 403) return true
+            e = e.cause?.takeIf { it !== e }
+        }
+        return false
     }
 
     // ---- public API ---------------------------------------------------------------------
@@ -186,6 +210,7 @@ class PlayerController(
             return
         }
         errorRetries = 0
+        fallbackRetries = 0
         skipped.clear()
         player.stop()
         player.clearMediaItems()

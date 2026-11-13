@@ -96,7 +96,8 @@ class MediaSourceBuilder {
             // give an HLS manifest: play that, with its own adaptive quality.
             val hls = info.hlsUrl
             if (!hls.isNullOrEmpty()) {
-                return HlsMediaSource.Factory(ytHls)
+                // Plain GETs, like a browser playing HLS (no POST/rn rewriting of the segments).
+                return HlsMediaSource.Factory(plainHttp)
                     .setAllowChunklessPreparation(true)
                     .createMediaSource(
                         MediaItem.Builder().setUri(hls).setMediaId(mediaId).setMediaMetadata(metadata).build()
