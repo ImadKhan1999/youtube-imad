@@ -91,20 +91,7 @@ class MediaSourceBuilder {
         val sources = ArrayList<MediaSource>(2)
         if (video != null) sources += buildStream(info, video, metadata)
         if (audio != null && (video == null || video.isVideoOnly)) sources += buildStream(info, audio, metadata)
-        if (sources.isEmpty()) {
-            // Some backup clients (used when YouTube blocks the normal one, e.g. on a VPN) only
-            // give an HLS manifest: play that, with its own adaptive quality.
-            val hls = info.hlsUrl
-            if (!hls.isNullOrEmpty()) {
-                // Plain GETs, like a browser playing HLS (no POST/rn rewriting of the segments).
-                return HlsMediaSource.Factory(plainHttp)
-                    .setAllowChunklessPreparation(true)
-                    .createMediaSource(
-                        MediaItem.Builder().setUri(hls).setMediaId(mediaId).setMediaMetadata(metadata).build()
-                    )
-            }
-            throw BuildException("No playable streams found for this video")
-        }
+        if (sources.isEmpty()) throw BuildException("No playable streams found for this video")
         captions.forEach { c ->
             val config = MediaItem.SubtitleConfiguration.Builder(Uri.parse(c.url))
                 .setMimeType(MimeTypes.TEXT_VTT)

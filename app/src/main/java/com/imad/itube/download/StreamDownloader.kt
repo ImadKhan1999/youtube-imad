@@ -1,11 +1,13 @@
 package com.imad.itube.download
 
+import com.imad.itube.data.net.NewPipeDownloader
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -23,7 +25,11 @@ class StreamDownloader(private val client: OkHttpClient) {
         target: File,
         onBytes: (Long) -> Unit,
     ) {
-        val ua = com.imad.itube.data.net.PlayerFallback.userAgentFor(url)
+        val ua = if (YoutubeParsingHelper.isVisionOsStreamingUrl(url)) {
+            YoutubeParsingHelper.getVisionOsUserAgent(null)
+        } else {
+            NewPipeDownloader.USER_AGENT
+        }
         val total = knownLength
         // Resume from a partial file left by a pause (only if it can belong to this stream).
         var position = if (target.exists() && (total <= 0 || target.length() <= total)) target.length() else 0L

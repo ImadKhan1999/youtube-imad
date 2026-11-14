@@ -100,7 +100,7 @@ class ShortsPlayer(private val context: Context, private val session: ShortsSess
                 } catch (e: Exception) {
                     Log.w(TAG, "Couldn't load $newUrl", e)
                     session.forget(newUrl)
-                    if (url == newUrl) error = com.imad.itube.data.playbackErrorMessage(e)
+                    if (url == newUrl) error = e.message ?: "This short can't be played"
                 }
             }
         }

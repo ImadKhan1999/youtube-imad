@@ -35,6 +35,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.schabi.newpipe.extractor.exceptions.AgeRestrictedContentException
+import org.schabi.newpipe.extractor.exceptions.ContentNotAvailableException
+import org.schabi.newpipe.extractor.exceptions.GeographicRestrictionException
+import org.schabi.newpipe.extractor.exceptions.PaidContentException
+import org.schabi.newpipe.extractor.exceptions.ReCaptchaException
 import org.schabi.newpipe.extractor.stream.StreamInfo
 
 /** What the watch page and mini player render. */
@@ -114,7 +119,6 @@ class PlayerController(
     val currentInfo: StreamInfo? get() = info
     private var loadJob: Job? = null
     private var errorRetries = 0
-    private var fallbackRetries = 0
     private val skipped = HashSet<Long>()
 
     /** Shown by the UI as a snackbar, e.g. "Skipped sponsor". */
@@ -125,26 +129,13 @@ class PlayerController(
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED) onEnded()
-                if (playbackState == Player.STATE_READY) {
-                    errorRetries = 0
-                    fallbackRetries = 0
-                }
+                if (playbackState == Player.STATE_READY) errorRetries = 0
             }
 
             override fun onPlayerError(error: PlaybackException) {
                 Log.w(TAG, "Playback error", error)
                 if (_state.value.offline) {
                     _state.update { it.copy(error = "Couldn't play this file: ${error.errorCodeName}") }
-                    return
-                }
-                // On a VPN the streams may come from a backup client (see PlayerFallback). If
-                // YouTube refuses that client's stream URLs, drop it and try the next one.
-                if (isForbidden(error) && fallbackRetries < 8 && _state.value.item != null &&
-                    com.imad.itube.data.net.PlayerFallback.markLastUsedBad() != null
-                ) {
-                    fallbackRetries++
-                    val position = player.currentPosition
-                    _state.value.item?.let { load(it, position, keepState = true) }
                     return
                 }
                 // Stream URLs expire after a few hours and YouTube sometimes answers 403;
@@ -179,17 +170,7 @@ class PlayerController(
         return buildString {
             append("Playback error: ").append(error.errorCodeName)
             if (!hint.isNullOrBlank()) append("\n").append(hint)
-            com.imad.itube.data.net.PlayerFallback.lastReport?.let { append("\n\nBackup methods: ").append(it) }
         }
-    }
-
-    private fun isForbidden(error: PlaybackException): Boolean {
-        var e: Throwable? = error
-        while (e != null) {
-            if (e is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException && e.responseCode == 403) return true
-            e = e.cause?.takeIf { it !== e }
-        }
-        return false
     }
 
     // ---- public API ---------------------------------------------------------------------
@@ -210,7 +191,6 @@ class PlayerController(
             return
         }
         errorRetries = 0
-        fallbackRetries = 0
         skipped.clear()
         player.stop()
         player.clearMediaItems()
@@ -506,7 +486,15 @@ class PlayerController(
         }
     }
 
-    private fun friendlyError(e: Exception): String = com.imad.itube.data.playbackErrorMessage(e)
+    private fun friendlyError(e: Exception): String = when (e) {
+        is AgeRestrictedContentException -> "This video is age-restricted. Sign-in support is coming."
+        is GeographicRestrictionException -> "This video isn't available in your country."
+        is PaidContentException -> "This video is for members or requires payment."
+        is ReCaptchaException -> "YouTube is asking to verify you're not a bot. Try again later."
+        is ContentNotAvailableException -> e.message ?: "This video isn't available."
+        is java.io.IOException -> "No connection. Check your network and try again."
+        else -> e.message ?: "Something went wrong"
+    }
 
     private companion object {
         const val TAG = "PlayerController"

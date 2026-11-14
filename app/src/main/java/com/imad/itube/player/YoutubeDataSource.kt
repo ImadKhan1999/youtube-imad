@@ -11,6 +11,7 @@ import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.TransferListener
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import com.imad.itube.data.net.NewPipeDownloader
 import org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper
 import java.util.concurrent.ConcurrentHashMap
 
@@ -48,7 +49,11 @@ class YoutubeDataSource private constructor(
     override fun open(dataSpec: DataSpec): Long {
         val url = dataSpec.uri.toString()
         val headers = HashMap<String, String>()
-        headers["User-Agent"] = com.imad.itube.data.net.PlayerFallback.userAgentFor(url)
+        headers["User-Agent"] = if (YoutubeParsingHelper.isVisionOsStreamingUrl(url)) {
+            YoutubeParsingHelper.getVisionOsUserAgent(null)
+        } else {
+            NewPipeDownloader.USER_AGENT
+        }
         if (YoutubeParsingHelper.isWebStreamingUrl(url)) {
             headers["Origin"] = YOUTUBE_BASE_URL
             headers["Referer"] = YOUTUBE_BASE_URL
