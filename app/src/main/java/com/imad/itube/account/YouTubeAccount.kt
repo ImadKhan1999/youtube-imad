@@ -196,7 +196,10 @@ class YouTubeAccount(private val http: OkHttpClient, private val store: AccountS
         res.findAll("continuationItemRenderer").lastOrNull()
             ?.findFirst("continuationCommand").str("token")
 
-    private fun parseVideos(res: JsonElement): List<VideoItem> {
+    private fun parseVideos(response: JsonElement): List<VideoItem> {
+        // Ads (the masthead at the top of home, in-feed ad slots, promoted videos) are removed
+        // first, and any renderer still carrying ad tracking is skipped below.
+        val res = AdFilter.strip(response)
         val seen = HashSet<String>()
         val out = ArrayList<VideoItem>()
         // Old-style renderers and the newer "lockup" view models, whichever this response uses.
@@ -210,10 +213,12 @@ class YouTubeAccount(private val http: OkHttpClient, private val store: AccountS
     }
 
     private fun parseVideoRenderer(v: JsonObject): VideoItem? {
+        if (AdFilter.looksLikeAd(v)) return null
         val id = v.str("videoId") ?: return null
         val owner = v.at("ownerText") ?: v.at("shortBylineText") ?: v.at("longBylineText")
         val channelId = owner.str("runs", 0, "navigationEndpoint", "browseEndpoint", "browseId")
         val badges = v.at("badges") as? JsonArray
+        if (badges?.any { isAdBadge(it.text("metadataBadgeRenderer", "label")) } == true) return null
         val live = badges?.any { it.str("metadataBadgeRenderer", "style") == "BADGE_STYLE_TYPE_LIVE_NOW" } == true
         return VideoItem(
             url = "https://www.youtube.com/watch?v=$id",
@@ -231,6 +236,7 @@ class YouTubeAccount(private val http: OkHttpClient, private val store: AccountS
 
     private fun parseLockup(v: JsonObject): VideoItem? {
         if (v.str("contentType") != "LOCKUP_CONTENT_TYPE_VIDEO") return null
+        if (AdFilter.looksLikeAd(v)) return null
         val id = v.str("contentId") ?: return null
         val meta = v.at("metadata", "lockupMetadataViewModel")
         val avatar = meta.at("image", "decoratedAvatarViewModel")
@@ -240,6 +246,7 @@ class YouTubeAccount(private val http: OkHttpClient, private val store: AccountS
         val badge = v.at("contentImage")?.findFirst("thumbnailBadgeViewModel")
         val badgeText = badge.str("text")
         val stats = rows.getOrNull(1).orEmpty()
+        if (rows.flatten().any(::isAdBadge) || isAdBadge(badgeText)) return null
         return VideoItem(
             url = "https://www.youtube.com/watch?v=$id",
             title = meta.text("title").orEmpty(),
@@ -252,6 +259,12 @@ class YouTubeAccount(private val http: OkHttpClient, private val store: AccountS
             duration = parseDuration(badgeText),
             isLive = badge.str("badgeStyle") == "THUMBNAIL_OVERLAY_BADGE_STYLE_LIVE" || badgeText == "LIVE",
         )
+    }
+
+    /** "Sponsored" / "Ad" labels YouTube puts on promoted items. */
+    private fun isAdBadge(text: String?): Boolean {
+        val t = text?.trim()?.lowercase() ?: return false
+        return t == "ad" || t == "sponsored" || t.startsWith("ad ·") || t.startsWith("sponsored ·") || t == "promoted"
     }
 
     companion object {

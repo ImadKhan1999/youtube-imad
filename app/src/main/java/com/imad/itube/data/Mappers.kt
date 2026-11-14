@@ -61,7 +61,18 @@ fun PlaylistInfoItem.toPlaylistItem(): PlaylistItem = PlaylistItem(
     videoCount = streamCount,
 )
 
-fun InfoItem.toFeedItem(): FeedItem? = when (this) {
+/**
+ * Promoted results that slip through the extractor point at an ad server (or anywhere that isn't
+ * YouTube) instead of a video page.
+ */
+fun InfoItem.isAd(): Boolean {
+    val u = url.orEmpty()
+    if (u.isEmpty()) return false
+    if (u.contains("googleadservices") || u.contains("doubleclick") || u.contains("/aclk") || u.contains("/pagead/")) return true
+    return !u.contains("youtube.com/") && !u.contains("youtu.be/")
+}
+
+fun InfoItem.toFeedItem(): FeedItem? = if (isAd()) null else when (this) {
     is StreamInfoItem -> toVideoItem()
     is ChannelInfoItem -> toChannelItem()
     is PlaylistInfoItem -> toPlaylistItem()
