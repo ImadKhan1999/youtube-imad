@@ -16,8 +16,8 @@ android {
         minSdk = 26
         targetSdk = 35
         // Release builds get these from the tag, e.g. v1.2.3 -> 1.2.3 (see .github/workflows/release.yml).
-        versionName = providers.gradleProperty("itubeVersionName").getOrElse("1.2.14")
-        versionCode = providers.gradleProperty("itubeVersionCode").map(String::toInt).getOrElse(10214)
+        versionName = providers.gradleProperty("itubeVersionName").getOrElse("1.2.15")
+        versionCode = providers.gradleProperty("itubeVersionCode").map(String::toInt).getOrElse(10215)
         vectorDrawables.useSupportLibrary = true
 
         // Anonymous usage stats (Firebase Analytics). The Firebase config comes from the

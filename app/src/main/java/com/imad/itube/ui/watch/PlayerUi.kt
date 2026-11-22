@@ -481,7 +481,14 @@ fun PlayerControls(
             )
         }
 
-        if (!isLive || liveSeekable) {
+        // In fullscreen the red line hides with the controls, like YouTube, so nothing sits over
+        // the video. In the small player it stays as a thin progress line.
+        if (!isLive || liveSeekable) AnimatedVisibility(
+            visible = !fullscreen || visible || scrubbing != null,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.BottomStart),
+        ) {
             SeekBar(
                 chapters = if (isLive) emptyList() else chapters,
                 position = ui.position,
@@ -495,7 +502,6 @@ fun PlayerControls(
                     interactionTick++
                 },
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
                     .padding(bottom = if (fullscreen) 16.dp else 0.dp, start = if (fullscreen) 12.dp else 0.dp, end = if (fullscreen) 12.dp else 0.dp),
             )
         }
