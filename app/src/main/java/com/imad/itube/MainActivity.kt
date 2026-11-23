@@ -38,6 +38,13 @@ import com.imad.itube.ui.HostCallbacks
 import com.imad.itube.ui.MainScreen
 import com.imad.itube.ui.MainUiState
 import com.imad.itube.ui.theme.ITubeTheme
+import com.imad.itube.ui.tv.TvMainScreen
+import com.imad.itube.data.store.ThemeMode
+import com.imad.itube.data.store.TvMode
+import com.imad.itube.util.useTvLayout
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
+import kotlinx.coroutines.runBlocking
 import org.schabi.newpipe.extractor.ServiceList
 
 class MainActivity : ComponentActivity() {
@@ -46,6 +53,8 @@ class MainActivity : ComponentActivity() {
     private val container get() = appContainer
     private val inPip = mutableStateOf(false)
     private var leftPipAt = 0L
+    /** The TV (remote) layout is showing: no picture-in-picture, and leaving the app stops the video. */
+    @Volatile private var tvLayout = false
 
     private val pipListener = Consumer<PictureInPictureModeChangedInfo> { info ->
         inPip.value = info.isInPictureInPictureMode
@@ -88,13 +97,26 @@ class MainActivity : ComponentActivity() {
 
         // The opening animation plays on a fresh launch from the home screen, not for links or restores.
         val launchedFromHome = savedInstanceState == null && intent?.action == Intent.ACTION_MAIN
+        // Read the stored TV layout choice before the first frame, so a forced layout never flashes.
+        val initialSettings = runCatching { runBlocking { container.settings.current() } }.getOrNull()
+        tvLayout = useTvLayout(initialSettings?.tvMode ?: TvMode.Auto)
         setContent {
-            val settings by container.settings.settings.collectAsState()
+            val liveSettings by container.settings.settings.collectAsState()
+            val loaded by container.settings.loaded.collectAsState()
+            // The StateFlow starts on defaults; until it has loaded, use what was read above.
+            val settings = if (!loaded && initialSettings != null) initialSettings else liveSettings
             val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
             var showSplash by rememberSaveable { mutableStateOf(launchedFromHome) }
-            ITubeTheme(settings.theme) {
+            val tv = remember(settings.tvMode) { useTvLayout(settings.tvMode) }
+            SideEffect { tvLayout = tv }
+            // YouTube on TV is always dark.
+            ITubeTheme(if (tv) ThemeMode.Dark else settings.theme) {
                 Box(Modifier.fillMaxSize()) {
-                    MainScreen(ui = ui, isInPip = inPip.value, isLandscape = landscape, host = host)
+                    if (tv) {
+                        TvMainScreen(ui = ui)
+                    } else {
+                        MainScreen(ui = ui, isInPip = inPip.value, isLandscape = landscape, host = host)
+                    }
                     if (showSplash && !inPip.value) SplashOverlay { showSplash = false }
                 }
             }
@@ -117,7 +139,8 @@ class MainActivity : ComponentActivity() {
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         val player = container.player.player
-        if (packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE) &&
+        if (!tvLayout &&
+            packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE) &&
             container.settings.settings.value.pipOnHome && ui.watchExpanded.value &&
             player.isPlaying && container.player.state.value.item != null
         ) {
@@ -135,7 +158,10 @@ class MainActivity : ComponentActivity() {
         if (isChangingConfigurations) return
         val player = container.player.player
         val closedPip = System.currentTimeMillis() - leftPipAt < 1500
-        if (closedPip || !container.settings.settings.value.backgroundPlay) {
+        if (tvLayout) {
+            // On a TV nobody listens to a video they can't see: pause like YouTube TV.
+            player.pause()
+        } else if (closedPip || !container.settings.settings.value.backgroundPlay) {
             // Swiping the PiP window away, or background play turned off: stop like YouTube does.
             player.pause()
         } else if (player.isPlaying) {
@@ -145,6 +171,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun enterPip() {
+        if (tvLayout) return
         if (!packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
             Toast.makeText(this, "Popup player isn't supported on this device", Toast.LENGTH_SHORT).show()
             return

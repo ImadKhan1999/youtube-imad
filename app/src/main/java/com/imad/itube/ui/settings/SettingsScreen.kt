@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import com.imad.itube.BuildConfig
 import com.imad.itube.appContainer
 import com.imad.itube.data.store.ThemeMode
+import com.imad.itube.data.store.TvMode
 import com.imad.itube.ui.brand.ImadLabs
 import com.imad.itube.ui.brand.ImadLabsMark
 import com.imad.itube.ui.brand.TelegramButton
@@ -56,6 +57,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     val store = container.settings
     val s by store.settings.collectAsState()
     var choice by remember { mutableStateOf<Choice<*>?>(null) }
+    val tv = com.imad.itube.ui.tv.LocalTvLayout.current
     val context = LocalContext.current
     val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
@@ -87,13 +89,13 @@ fun SettingsScreen(onBack: () -> Unit) {
                     store.update { it.copy(defaultSpeed = v) }
                 }
             }
-            ValueRow("Double-tap to seek", "${s.seekSeconds} seconds") {
+            ValueRow(if (tv) "Seek step (left / right)" else "Double-tap to seek", "${s.seekSeconds} seconds") {
                 choice = Choice("Double-tap to seek", listOf(5, 10, 15, 20, 30).map { "$it seconds" to it }, s.seekSeconds) { v ->
                     store.update { it.copy(seekSeconds = v) }
                 }
             }
 
-            SwitchRow("Ambient mode", "A soft glow of the video's colours around the player in dark theme", s.ambientMode) { v ->
+            if (!tv) SwitchRow("Ambient mode", "A soft glow of the video's colours around the player in dark theme", s.ambientMode) { v ->
                 store.update { it.copy(ambientMode = v) }
             }
 
@@ -101,7 +103,7 @@ fun SettingsScreen(onBack: () -> Unit) {
             SwitchRow("Background play", "Keep playing audio when you leave the app or lock the screen", s.backgroundPlay) { v ->
                 store.update { it.copy(backgroundPlay = v) }
             }
-            SwitchRow("Picture-in-picture", "Shrink the video into a popup when you go home", s.pipOnHome) { v ->
+            if (!tv) SwitchRow("Picture-in-picture", "Shrink the video into a popup when you go home", s.pipOnHome) { v ->
                 store.update { it.copy(pipOnHome = v) }
             }
             SwitchRow("Autoplay", "Play the next suggested video when one ends", s.autoplay) { v ->
@@ -136,9 +138,14 @@ fun SettingsScreen(onBack: () -> Unit) {
             }
 
             Section("General")
-            ValueRow("Appearance", s.theme.label()) {
+            if (!tv) ValueRow("Appearance", s.theme.label()) {
                 choice = Choice("Appearance", ThemeMode.entries.map { it.label() to it }, s.theme) { v ->
                     store.update { it.copy(theme = v) }
+                }
+            }
+            ValueRow("TV layout", s.tvMode.label()) {
+                choice = Choice("TV layout", TvMode.entries.map { it.label() to it }, s.tvMode) { v ->
+                    store.update { it.copy(tvMode = v) }
                 }
             }
             SwitchRow("Restricted mode", "Hide videos that may be inappropriate", s.restrictedMode) { v ->
@@ -193,6 +200,12 @@ private fun folderLabel(tree: String?): String {
     return id.substringAfter(':').ifBlank { "Internal storage" }
 }
 
+private fun TvMode.label() = when (this) {
+    TvMode.Auto -> "Automatic (detect Android TV)"
+    TvMode.On -> "Always use the TV layout"
+    TvMode.Off -> "Never (phone layout)"
+}
+
 private fun ThemeMode.label() = when (this) {
     ThemeMode.System -> "Use device theme"
     ThemeMode.Light -> "Light theme"
@@ -227,6 +240,8 @@ private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChang
             Text(title, style = MaterialTheme.typography.bodyLarge)
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Yt.colors.textSecondary)
         }
-        Switch(checked = checked, onCheckedChange = onChange, colors = SwitchDefaults.colors(checkedTrackColor = YtRed))
+        // On TV the whole row is the one focus stop; a focusable switch inside would be a second.
+        val tv = com.imad.itube.ui.tv.LocalTvLayout.current
+        Switch(checked = checked, onCheckedChange = if (tv) null else onChange, colors = SwitchDefaults.colors(checkedTrackColor = YtRed))
     }
 }

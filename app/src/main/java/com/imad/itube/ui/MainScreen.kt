@@ -50,7 +50,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import com.imad.itube.util.isTelevision
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -173,7 +172,8 @@ fun MainScreen(
     LaunchedEffect(hasVideo) { if (!hasVideo) ui.collapse() }
     val context = LocalContext.current
     val config = LocalConfiguration.current
-    val isTv = remember { context.isTelevision() }
+    // TV boxes get their own layout (TvMainScreen); this one is the phone / tablet layout.
+    val isTv = false
     // Tablets and foldables keep the watch page in landscape (two panes) and go full screen on request.
     val largeScreen = config.smallestScreenWidthDp >= 600
     var manualFullscreen by remember { mutableStateOf(false) }

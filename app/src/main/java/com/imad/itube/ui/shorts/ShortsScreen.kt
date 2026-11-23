@@ -83,6 +83,13 @@ import com.imad.itube.ui.watch.DoubleSpeedPill
 import com.imad.itube.ui.watch.holdForDoubleSpeed
 import com.imad.itube.util.Format
 import kotlinx.coroutines.delay
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
@@ -161,7 +168,40 @@ fun ShortsScreen(seed: String? = null) {
         }
     }
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    // Remote / keyboard: up and down move between shorts, centre pauses and resumes.
+    val keyFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { keyFocus.requestFocus() } }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .focusRequester(keyFocus)
+            .onPreviewKeyEvent { e ->
+                if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                when (e.key) {
+                    Key.DirectionDown, Key.PageDown, Key.ChannelDown, Key.MediaNext -> {
+                        if (pager.currentPage < shorts.size - 1) scope.launch { pager.animateScrollToPage(pager.currentPage + 1) }
+                        true
+                    }
+                    Key.DirectionUp, Key.PageUp, Key.ChannelUp, Key.MediaPrevious -> {
+                        if (pager.currentPage > 0) {
+                            scope.launch { pager.animateScrollToPage(pager.currentPage - 1) }
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.MediaPlayPause, Key.Spacebar -> {
+                        if (e.nativeKeyEvent.repeatCount > 0) return@onPreviewKeyEvent true
+                        val p = shortsPlayer.slot(pager.settledPage).player
+                        p.playWhenReady = !p.playWhenReady
+                        true
+                    }
+                    else -> false
+                }
+            }
+            .focusable(),
+    ) {
         VerticalPager(
             state = pager,
             modifier = Modifier.fillMaxSize(),
