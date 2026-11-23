@@ -14,12 +14,16 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 private val Context.settingsDataStore by preferencesDataStore(name = "settings")
 
 enum class ThemeMode { System, Light, Dark }
+
+/** Which layout to use: the TV (remote-control) one, the phone one, or decide from the device. */
+enum class TvMode { Auto, On, Off }
 
 data class Settings(
     /** Preferred video height for "Auto" quality, e.g. 720. */
@@ -51,6 +55,8 @@ data class Settings(
     val notifiedAt: Long = 0,
     /** The user ticked "Don't show this again" on the welcome / Telegram popup. */
     val welcomeDismissed: Boolean = false,
+    /** TV layout: Auto detects Android TV boxes; On / Off override a wrong guess. */
+    val tvMode: TvMode = TvMode.Auto,
 )
 
 class SettingsStore(private val context: Context, private val scope: CoroutineScope) {
@@ -76,10 +82,16 @@ class SettingsStore(private val context: Context, private val scope: CoroutineSc
         val seenAt = longPreferencesKey("notifications_seen_at")
         val notifiedAt = longPreferencesKey("notified_at")
         val welcomeDismissed = booleanPreferencesKey("welcome_dismissed")
+        val tvMode = stringPreferencesKey("tv_mode")
     }
+
+    private val _loaded = kotlinx.coroutines.flow.MutableStateFlow(false)
+    /** True once [settings] holds what's on disk rather than the defaults. */
+    val loaded: StateFlow<Boolean> = _loaded
 
     val settings: StateFlow<Settings> = context.settingsDataStore.data
         .map { it.toSettings() }
+        .onEach { _loaded.value = true }
         .stateIn(scope, SharingStarted.Eagerly, Settings())
 
     private fun Preferences.toSettings() = Settings(
@@ -104,6 +116,7 @@ class SettingsStore(private val context: Context, private val scope: CoroutineSc
         notificationsSeenAt = this[Keys.seenAt] ?: 0,
         notifiedAt = this[Keys.notifiedAt] ?: 0,
         welcomeDismissed = this[Keys.welcomeDismissed] ?: false,
+        tvMode = this[Keys.tvMode]?.let { runCatching { TvMode.valueOf(it) }.getOrNull() } ?: TvMode.Auto,
     )
 
     /** The stored settings, read straight from disk (the StateFlow starts with defaults). */
@@ -133,6 +146,7 @@ class SettingsStore(private val context: Context, private val scope: CoroutineSc
                 prefs[Keys.seenAt] = s.notificationsSeenAt
                 prefs[Keys.notifiedAt] = s.notifiedAt
                 prefs[Keys.welcomeDismissed] = s.welcomeDismissed
+                prefs[Keys.tvMode] = s.tvMode.name
             }
         }
     }
