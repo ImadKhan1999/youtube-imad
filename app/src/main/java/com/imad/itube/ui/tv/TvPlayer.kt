@@ -212,6 +212,17 @@ fun TvPlayerScreen(onExit: () -> Unit) {
         scrub.target = null
     }
 
+    // Opening the options panel (quality, speed, captions...) never pauses the video, like
+    // YouTube TV: if it was playing when the panel opened, it keeps playing — even across a
+    // quality switch — unless the remote's own pause key is pressed.
+    var keepPlaying by remember { mutableStateOf(false) }
+    LaunchedEffect(panel != null) {
+        keepPlaying = panel != null && player.playWhenReady
+    }
+    LaunchedEffect(keepPlaying, ui.playWhenReady, ui.playbackState) {
+        if (keepPlaying && panel != null && !player.playWhenReady && !ui.ended) player.play()
+    }
+
     BackHandler {
         when {
             panel != null -> { panel = null; showControls(playButton) }
@@ -234,9 +245,9 @@ fun TvPlayerScreen(onExit: () -> Unit) {
                 val repeat = e.nativeKeyEvent.repeatCount
                 // Media keys work everywhere.
                 when (e.key) {
-                    Key.MediaPlayPause -> { if (repeat == 0) togglePlay(); if (!controls) showControls(playButton); return@onPreviewKeyEvent true }
+                    Key.MediaPlayPause -> { keepPlaying = false; if (repeat == 0) togglePlay(); if (!controls) showControls(playButton); return@onPreviewKeyEvent true }
                     Key.MediaPlay -> { player.play(); return@onPreviewKeyEvent true }
-                    Key.MediaPause -> { player.pause(); showControls(playButton); return@onPreviewKeyEvent true }
+                    Key.MediaPause -> { keepPlaying = false; player.pause(); showControls(playButton); return@onPreviewKeyEvent true }
                     Key.MediaFastForward -> { scrub.step(player, true, repeat, settings.seekSeconds); if (!controls) showControls(seekBar); return@onPreviewKeyEvent true }
                     Key.MediaRewind -> { scrub.step(player, false, repeat, settings.seekSeconds); if (!controls) showControls(seekBar); return@onPreviewKeyEvent true }
                     Key.MediaNext -> { if (repeat == 0) controller.playNext(); return@onPreviewKeyEvent true }
@@ -244,7 +255,14 @@ fun TvPlayerScreen(onExit: () -> Unit) {
                     Key.MediaStop -> { onExit(); return@onPreviewKeyEvent true }
                     else -> {}
                 }
-                if (panel != null || controls) return@onPreviewKeyEvent false
+                // The panel only takes the arrows, OK and Back; nothing in it pauses the video.
+                if (panel != null) {
+                    return@onPreviewKeyEvent when (e.key) {
+                        Key.Spacebar -> true
+                        else -> false
+                    }
+                }
+                if (controls) return@onPreviewKeyEvent false
                 // Controls hidden: the remote drives playback directly.
                 when (e.key) {
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.Spacebar -> {

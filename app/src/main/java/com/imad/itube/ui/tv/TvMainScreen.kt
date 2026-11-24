@@ -45,6 +45,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -157,6 +163,7 @@ fun TvMainScreen(ui: MainUiState) {
     // Nothing to show any more: drop the player.
     LaunchedEffect(watch.item) { if (watch.item == null) ui.collapse() }
 
+    var voiceRequest by remember { mutableIntStateOf(0) }
     val railFocus = remember { FocusRequester() }
     var railHasFocus by remember { mutableStateOf(false) }
     val entry by nav.currentBackStackEntryAsState()
@@ -184,7 +191,22 @@ fun TvMainScreen(ui: MainUiState) {
 
     TvFocusTheme {
         CompositionLocalProvider(LocalAppActions provides actions) {
-            Box(Modifier.fillMaxSize().background(TvBg)) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(TvBg)
+                    // The remote's search / voice button jumps to Search and starts listening.
+                    .onPreviewKeyEvent { e ->
+                        if (playing || e.type != KeyEventType.KeyDown || e.nativeKeyEvent.repeatCount > 0) return@onPreviewKeyEvent false
+                        if (e.key == Key.Search || e.key == Key.VoiceAssist) {
+                            nav.navigate("search") { launchSingleTop = true }
+                            voiceRequest++
+                            true
+                        } else {
+                            false
+                        }
+                    },
+            ) {
                 // Browse screens. Coming back from the player or the rail lands on the card you left.
                 Box(
                     Modifier
@@ -193,7 +215,7 @@ fun TvMainScreen(ui: MainUiState) {
                         .focusRequester(contentFocus)
                         .focusRestorer(),
                 ) {
-                    TvNavGraph(nav, ui)
+                    TvNavGraph(nav, ui, voiceRequest)
                 }
 
                 TvNavRail(
@@ -250,7 +272,16 @@ private fun TvNavRail(
             .padding(vertical = 28.dp),
     ) {
         Box(Modifier.padding(start = 28.dp, bottom = 28.dp).height(28.dp), contentAlignment = Alignment.CenterStart) {
-            if (open) ITubeLogo(height = 22.dp) else Box(Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFFFF0033)))
+            // The real iTube emblem; the word "iTube" joins it while the menu is open.
+            if (open) {
+                ITubeLogo(height = 22.dp)
+            } else {
+                androidx.compose.foundation.Image(
+                    androidx.compose.ui.res.painterResource(com.imad.itube.R.drawable.ic_itube_emblem),
+                    contentDescription = "iTube",
+                    modifier = Modifier.size(32.dp),
+                )
+            }
         }
         TV_TABS.forEachIndexed { i, tab ->
             val selected = i == selectedIndex
@@ -297,11 +328,11 @@ private fun TvNavRail(
 }
 
 @Composable
-private fun TvNavGraph(nav: NavHostController, ui: MainUiState) {
+private fun TvNavGraph(nav: NavHostController, ui: MainUiState, voiceRequest: Int) {
     val back: () -> Unit = { nav.popBackStack() }
     NavHost(nav, startDestination = "home", modifier = Modifier.fillMaxSize()) {
         composable("home") { TvHomeScreen() }
-        composable("search") { TvSearchScreen() }
+        composable("search") { TvSearchScreen(voiceRequest) }
         composable("shorts") { ShortsScreen() }
         composable("subscriptions") { TvSubscriptionsScreen() }
         composable("library") {

@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.node.DrawModifierNode
 import androidx.compose.ui.node.invalidateDraw
@@ -75,8 +76,8 @@ object TvFocusIndication : IndicationNodeFactory {
             drawContent()
             val radius = CornerRadius(8.dp.toPx())
             if (focused) {
-                drawRoundRect(Color.White.copy(alpha = if (pressed) 0.28f else 0.16f), cornerRadius = radius)
-                val w = 2.dp.toPx()
+                drawRoundRect(Color.White.copy(alpha = if (pressed) 0.32f else 0.22f), cornerRadius = radius)
+                val w = 3.dp.toPx()
                 drawRoundRect(
                     Color.White,
                     topLeft = androidx.compose.ui.geometry.Offset(w / 2, w / 2),
@@ -113,7 +114,7 @@ fun TvFocusTheme(content: @Composable () -> Unit) {
 @Composable
 fun Modifier.tvClickable(
     shape: Shape = RoundedCornerShape(12.dp),
-    focusedScale: Float = 1.06f,
+    focusedScale: Float = 1.08f,
     border: Dp = 3.dp,
     onFocusChange: ((Boolean) -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
@@ -130,6 +131,14 @@ fun Modifier.tvClickable(
             }
         }
         .graphicsLayer { scaleX = scale; scaleY = scale }
+        // A soft white glow under the focused element, so it stands out on any background.
+        .then(
+            if (focused) {
+                Modifier.shadow(18.dp, shape, clip = false, ambientColor = Color.White, spotColor = Color.White)
+            } else {
+                Modifier
+            },
+        )
         .then(if (focused) Modifier.border(border, Color.White, shape) else Modifier)
         .combinedClickable(
             interactionSource = source,
