@@ -1,5 +1,10 @@
 package com.imad.itube.ui.tv
 
+import android.content.Intent
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -113,6 +118,7 @@ fun TvVideoCard(video: VideoItem, modifier: Modifier = Modifier) {
     Column(
         modifier.tvClickable(
             shape = RoundedCornerShape(12.dp),
+            focusedScale = 1.1f,
             border = 0.dp,
             onFocusChange = { focused = it },
             onLongClick = {
@@ -127,7 +133,7 @@ fun TvVideoCard(video: VideoItem, modifier: Modifier = Modifier) {
                 .aspectRatio(16f / 9f)
                 .clip(RoundedCornerShape(12.dp))
                 .background(TvSurface)
-                .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(12.dp)) else Modifier),
+                .then(if (focused) Modifier.border(4.dp, Color.White, RoundedCornerShape(12.dp)) else Modifier),
         ) {
             HiResImage(video.thumbnail, Modifier.fillMaxSize())
             val badge = when {
@@ -226,7 +232,7 @@ fun TvPlaylistCard(playlist: PlaylistItem, modifier: Modifier = Modifier) {
                 .aspectRatio(16f / 9f)
                 .clip(RoundedCornerShape(12.dp))
                 .background(TvSurface)
-                .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(12.dp)) else Modifier),
+                .then(if (focused) Modifier.border(4.dp, Color.White, RoundedCornerShape(12.dp)) else Modifier),
         ) {
             HiResImage(playlist.thumbnail, Modifier.fillMaxSize())
             Row(
@@ -558,9 +564,13 @@ fun TvLibraryScreen(
     }
 }
 
-/** Search: a text box (the TV's own keyboard opens on OK), suggestions and a grid of results. */
+/**
+ * Search: a microphone for voice search (focused first, like YouTube TV), a text box (the TV's
+ * own keyboard opens on OK), suggestions and a grid of results. [voiceRequest] going up starts
+ * voice search straight away, e.g. from the remote's search / mic button.
+ */
 @Composable
-fun TvSearchScreen() {
+fun TvSearchScreen(voiceRequest: Int = 0) {
     val container = LocalContext.current.appContainer
     val vm: SearchViewModel = viewModel { SearchViewModel(container) }
     val query by vm.query.collectAsState()
@@ -572,13 +582,48 @@ fun TvSearchScreen() {
     val keyboard = LocalSoftwareKeyboardController.current
     val boxFocus = remember { FocusRequester() }
     var boxFocused by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { if (submitted == null) runCatching { boxFocus.requestFocus() } }
+    val micFocus = remember { FocusRequester() }
+    val actions = LocalAppActions.current
+    val voice = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val heard = result.data
+            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            ?.firstOrNull()
+            ?.trim()
+        if (!heard.isNullOrEmpty()) vm.submit(heard)
+    }
+    fun startVoice() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_WEB_SEARCH)
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Search YouTube")
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+        }
+        val ok = runCatching { voice.launch(intent) }.isSuccess
+        if (!ok) actions.toast("Voice search isn't available on this device. Install or update the Google app.")
+    }
+    LaunchedEffect(Unit) { if (submitted == null) runCatching { micFocus.requestFocus() } }
+    LaunchedEffect(voiceRequest) { if (voiceRequest > 0) startVoice() }
 
     Column(Modifier.fillMaxSize()) {
+      Row(
+          Modifier.padding(start = 24.dp, end = 40.dp, top = 28.dp),
+          verticalAlignment = Alignment.CenterVertically,
+      ) {
+        var micFocused by remember { mutableStateOf(false) }
+        Box(
+            Modifier
+                .size(56.dp)
+                .focusRequester(micFocus)
+                .tvClickable(shape = CircleShape, focusedScale = 1.12f, border = 0.dp, onFocusChange = { micFocused = it }) { startVoice() }
+                .clip(CircleShape)
+                .background(if (micFocused) Color.White else TvSurface),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Filled.Mic, "Voice search", tint = if (micFocused) Color(0xFF0F0F0F) else Color.White, modifier = Modifier.size(28.dp))
+        }
+        Spacer(Modifier.width(16.dp))
         Row(
             Modifier
-                .padding(start = 24.dp, end = 40.dp, top = 28.dp)
-                .fillMaxWidth()
+                .weight(1f)
                 .height(56.dp)
                 .clip(RoundedCornerShape(28.dp))
                 .background(if (boxFocused) Color.White else TvSurface)
@@ -605,6 +650,7 @@ fun TvSearchScreen() {
                 )
             }
         }
+      }
 
         // Suggestions while typing, recent searches when the box is empty.
         val words = if (query.isBlank()) library.searchHistory.take(12) else suggestions.take(12)
