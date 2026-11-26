@@ -33,7 +33,7 @@ class AppContainer(val app: Application) {
         .dns(com.imad.itube.data.net.FallbackDns)
         .build()
 
-    val downloader = NewPipeDownloader(okHttp)
+    val downloader = NewPipeDownloader(app, okHttp)
 
     val settings = SettingsStore(app, appScope)
     val library = LibraryStore(app, appScope)
@@ -44,7 +44,9 @@ class AppContainer(val app: Application) {
     val sponsorBlock = com.imad.itube.data.SponsorBlock(okHttp)
     val dislikes = com.imad.itube.data.ReturnYouTubeDislike(okHttp)
     val player = PlayerController(app, repository, settings, library, sponsorBlock, appScope)
-    val accountStore = AccountStore(app, appScope)
+    val accountStore = AccountStore(app, appScope).also { store ->
+        downloader.accountCookies = { store.account.value?.cookies }
+    }
     val account = YouTubeAccount(okHttp, accountStore)
     val accountComments = com.imad.itube.account.AccountComments(account)
     val liveChat = com.imad.itube.account.LiveChat(account)
